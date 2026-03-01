@@ -22,6 +22,7 @@ Production-ready weather application built with Next.js App Router, TypeScript, 
 
 - Secure BFF API route at `/api/weather` (server-side OpenWeather API key usage)
 - Redis edge cache (Upstash) with 10-minute TTL for weather payloads
+- Route-level rate limiting (Upstash Ratelimit) for `/api/weather`, `/api/cities`, and prefetch API
 - AQI integration via OpenWeather Air Pollution API
 - Geolocation-first load with fallback to `London`
 - Magnetic expanding search bar with spring animation, city suggestions, and `Cmd/Ctrl + K`
@@ -94,6 +95,13 @@ Response (minified weather payload):
 - Cache hit returns instantly if data is newer than 10 minutes.
 - Cache miss/stale data fetches from OpenWeather and stores in Redis with `EX 600`.
 - If Redis is unavailable, API falls back to direct OpenWeather fetch and logs the issue without breaking responses.
+- Responses include `X-Cache: HIT|MISS|BYPASS` for observability.
+- API responses use CDN-friendly headers: `public, s-maxage=300, stale-while-revalidate=600`.
+
+## API Protection
+
+- Sliding-window rate limiting protects weather and city endpoints from abuse.
+- Fallback logic for One Call API is explicit: forecast fallback is used only for known One Call availability/subscription failures, not for all upstream errors.
 
 ## Offline Behavior
 

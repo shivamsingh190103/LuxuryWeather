@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WeatherServiceError, getWeatherPayloadWithMeta } from "@/lib/server/weather-service";
+import { enforceRateLimit, getRequestIdentifier } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,17 @@ function toNumber(input: string | null): number | undefined {
 }
 
 export async function GET(request: NextRequest) {
+  const rateLimit = await enforceRateLimit("weather", getRequestIdentifier(request));
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again shortly." },
+      {
+        status: 429,
+        headers: rateLimit.headers
+      }
+    );
+  }
+
   const city = request.nextUrl.searchParams.get("city")?.trim();
   const lat = toNumber(request.nextUrl.searchParams.get("lat"));
   const lon = toNumber(request.nextUrl.searchParams.get("lon"));
@@ -28,16 +40,23 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         "content-type": "application/json; charset=utf-8",
-        "cache-control": "private, max-age=300",
-        "x-cache": cacheStatus
+        "cache-control": "public, s-maxage=300, stale-while-revalidate=600",
+        "x-cache": cacheStatus,
+        ...rateLimit.headers
       }
     });
   } catch (error) {
     if (error instanceof WeatherServiceError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status, headers: rateLimit.headers }
+      );
     }
 
     console.error("Unexpected weather API error", error);
-    return NextResponse.json({ error: "Failed to load weather" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to load weather" },
+      { status: 500, headers: rateLimit.headers }
+    );
   }
 }

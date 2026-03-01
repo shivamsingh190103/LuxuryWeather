@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
+    "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.3",
     "framer-motion": "^11.15.0",
     "idb-keyval": "^6.2.2",

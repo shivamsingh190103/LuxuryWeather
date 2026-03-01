@@ -10,8 +10,6 @@ import { DynamicBackground } from "@/components/DynamicBackground";
 import { GlassCard } from "@/components/GlassCard";
 import { SearchBar, type SearchBarRef } from "@/components/SearchBar";
 import { SkeletonCard } from "@/components/SkeletonCard";
-import { TempTrendChart } from "@/components/TempTrendChart";
-import { WeatherIconMotion } from "@/components/WeatherIconMotion";
 import { WeatherMetrics } from "@/components/WeatherMetrics";
 import { WeatherSceneFX } from "@/components/WeatherSceneFX";
 import { useCanHover } from "@/hooks/useCanHover";
@@ -34,6 +32,26 @@ const LazyWeatherMap = dynamic(
     ssr: false,
     loading: () => (
       <div className="h-52 animate-pulse rounded-2xl border border-white/10 bg-white/10" />
+    )
+  }
+);
+
+const LazyTempTrendChart = dynamic(
+  () => import("@/components/TempTrendChart").then((mod) => mod.TempTrendChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-44 animate-pulse rounded-2xl border border-white/10 bg-white/10" />
+    )
+  }
+);
+
+const LazyWeatherIconMotion = dynamic(
+  () => import("@/components/WeatherIconMotion").then((mod) => mod.WeatherIconMotion),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-24 w-24 animate-pulse rounded-full border border-white/10 bg-white/10" />
     )
   }
 );
@@ -528,7 +546,7 @@ export function WeatherClient() {
                   </div>
 
                   <div className="self-end sm:self-auto">
-                    <WeatherIconMotion condition={weather.current.condition} />
+                    <LazyWeatherIconMotion condition={weather.current.condition} />
                   </div>
                 </motion.div>
 
@@ -548,7 +566,7 @@ export function WeatherClient() {
                   <h2 className="mb-2 text-xs uppercase tracking-widest text-white/60">
                     24-hour temperature trend
                   </h2>
-                  <TempTrendChart data={weather.hourly} />
+                  <LazyTempTrendChart data={weather.hourly} />
                 </motion.section>
 
                 <motion.section variants={childVariants} className="space-y-2">

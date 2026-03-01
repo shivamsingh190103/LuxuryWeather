@@ -25,6 +25,18 @@ type CacheEnvelope<T> = {
   data: T;
 };
 
+class OpenWeatherError extends Error {
+  status: number;
+  upstreamMessage?: string;
+
+  constructor(status: number, message: string, upstreamMessage?: string) {
+    super(message);
+    this.name = "OpenWeatherError";
+    this.status = status;
+    this.upstreamMessage = upstreamMessage;
+  }
+}
+
 type GeoEntry = {
   name: string;
   lat: number;
@@ -106,13 +118,51 @@ async function fetchJson<T>(url: string): Promise<T> {
     next: { revalidate: 0 }
   });
 
+  const rawBody = await response.text();
+
   if (!response.ok) {
-    const error = new Error(`OpenWeather error: ${response.status}`);
-    (error as Error & { status?: number }).status = response.status;
-    throw error;
+    let upstreamMessage: string | undefined;
+
+    try {
+      const parsed = JSON.parse(rawBody) as { message?: string };
+      upstreamMessage = parsed?.message;
+    } catch {
+      upstreamMessage = rawBody || undefined;
+    }
+
+    throw new OpenWeatherError(
+      response.status,
+      `OpenWeather error: ${response.status}`,
+      upstreamMessage
+    );
   }
 
-  return (await response.json()) as T;
+  return JSON.parse(rawBody) as T;
+}
+
+function shouldFallbackToForecast(error: unknown) {
+  if (!(error instanceof OpenWeatherError)) {
+    return false;
+  }
+
+  const message = (error.upstreamMessage ?? "").toLowerCase();
+  const subscriptionKeywords = [
+    "subscription",
+    "not subscribed",
+    "one call",
+    "onecall",
+    "product not found"
+  ];
+
+  if (error.status === 404) {
+    return true;
+  }
+
+  if (error.status === 401 || error.status === 403) {
+    return subscriptionKeywords.some((keyword) => message.includes(keyword));
+  }
+
+  return false;
 }
 
 function requireOpenWeatherApiKey() {
@@ -163,8 +213,8 @@ async function fetchWeatherFromOpenWeather(query: WeatherServiceQuery): Promise<
 
   const normalized = normalizeQuery(query);
 
-  let resolvedLat = normalized.lat;
-  let resolvedLon = normalized.lon;
+  let targetLat = normalized.lat;
+  let targetLon = normalized.lon;
   let resolvedCity = normalized.city ?? "";
   let resolvedCountry = "";
 
@@ -176,24 +226,23 @@ async function fetchWeatherFromOpenWeather(query: WeatherServiceQuery): Promise<
       throw new WeatherServiceError("City not found", 404);
     }
 
-    resolvedLat = geocode[0].lat;
-    resolvedLon = geocode[0].lon;
+    targetLat = geocode[0].lat;
+    targetLon = geocode[0].lon;
     resolvedCity = geocode[0].name;
     resolvedCountry = geocode[0].country;
   }
 
-  const currentUrl = `${OPENWEATHER_BASE}/data/2.5/weather?lat=${resolvedLat}&lon=${resolvedLon}&appid=${apiKey}&units=metric`;
+  const currentUrl = `${OPENWEATHER_BASE}/data/2.5/weather?lat=${targetLat}&lon=${targetLon}&appid=${apiKey}&units=metric`;
   const current = await fetchJson<WeatherNow>(currentUrl);
 
-  resolvedLat = current.coord.lat;
-  resolvedLon = current.coord.lon;
+  // Keep query/geocode coordinates stable across downstream calls.
   resolvedCity = current.name;
   resolvedCountry = current.sys.country;
 
   let hourly: WeatherPayload["hourly"] = [];
 
   try {
-    const oneCallUrl = `${OPENWEATHER_BASE}/data/3.0/onecall?lat=${resolvedLat}&lon=${resolvedLon}&appid=${apiKey}&units=metric&exclude=minutely,daily,alerts`;
+    const oneCallUrl = `${OPENWEATHER_BASE}/data/3.0/onecall?lat=${targetLat}&lon=${targetLon}&appid=${apiKey}&units=metric&exclude=minutely,daily,alerts`;
     const oneCall = await fetchJson<OneCall>(oneCallUrl);
     hourly = oneCall.hourly.slice(0, 24).map((entry) => ({
       ts: entry.dt,
@@ -201,8 +250,12 @@ async function fetchWeatherFromOpenWeather(query: WeatherServiceQuery): Promise<
       condition: entry.weather[0]?.main ?? "Unknown",
       icon: entry.weather[0]?.icon ?? "01d"
     }));
-  } catch {
-    const forecastUrl = `${OPENWEATHER_BASE}/data/2.5/forecast?lat=${resolvedLat}&lon=${resolvedLon}&appid=${apiKey}&units=metric`;
+  } catch (error) {
+    if (!shouldFallbackToForecast(error)) {
+      throw error;
+    }
+
+    const forecastUrl = `${OPENWEATHER_BASE}/data/2.5/forecast?lat=${targetLat}&lon=${targetLon}&appid=${apiKey}&units=metric`;
     const forecast = await fetchJson<Forecast3H>(forecastUrl);
     hourly = buildHourlyFromForecast(forecast);
   }
@@ -210,7 +263,7 @@ async function fetchWeatherFromOpenWeather(query: WeatherServiceQuery): Promise<
   let aqi: number | undefined;
 
   try {
-    const airUrl = `${OPENWEATHER_BASE}/data/2.5/air_pollution?lat=${resolvedLat}&lon=${resolvedLon}&appid=${apiKey}`;
+    const airUrl = `${OPENWEATHER_BASE}/data/2.5/air_pollution?lat=${targetLat}&lon=${targetLon}&appid=${apiKey}`;
     const air = await fetchJson<AirPollution>(airUrl);
     aqi = air.list[0]?.main.aqi;
   } catch {
@@ -221,8 +274,8 @@ async function fetchWeatherFromOpenWeather(query: WeatherServiceQuery): Promise<
     location: {
       name: resolvedCity,
       country: resolvedCountry,
-      lat: Number((resolvedLat ?? 0).toFixed(4)),
-      lon: Number((resolvedLon ?? 0).toFixed(4))
+      lat: Number((targetLat ?? 0).toFixed(4)),
+      lon: Number((targetLon ?? 0).toFixed(4))
     },
     current: {
       temp: Number(current.main.temp.toFixed(1)),
