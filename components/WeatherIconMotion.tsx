@@ -2,6 +2,7 @@
 
 import { m } from "framer-motion";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import type { DotLottie } from "@lottiefiles/dotlottie-react";
 import {
   Cloud,
   CloudFog,
@@ -11,7 +12,7 @@ import {
   Sun,
   Wind
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type WeatherIconMotionProps = {
   condition: string;
@@ -19,17 +20,15 @@ type WeatherIconMotionProps = {
 
 type AnimationKey = "clear" | "clouds" | "rain" | "snow" | "thunderstorm" | "drizzle" | "fog";
 
-const animationImporters: Record<AnimationKey, () => Promise<{ default: unknown }>> = {
-  clear: () => import("@/public/lottie/sun.json"),
-  clouds: () => import("@/public/lottie/cloud.json"),
-  rain: () => import("@/public/lottie/rain.json"),
-  snow: () => import("@/public/lottie/snow.json"),
-  thunderstorm: () => import("@/public/lottie/thunder.json"),
-  drizzle: () => import("@/public/lottie/drizzle.json"),
-  fog: () => import("@/public/lottie/fog.json")
+const animationSrcByKey: Record<AnimationKey, string> = {
+  clear: "/lottie/sun.lottie",
+  clouds: "/lottie/cloud.lottie",
+  rain: "/lottie/rain.lottie",
+  snow: "/lottie/snow.lottie",
+  thunderstorm: "/lottie/thunder.lottie",
+  drizzle: "/lottie/drizzle.lottie",
+  fog: "/lottie/fog.lottie"
 };
-
-const animationCache = new Map<AnimationKey, string>();
 
 function resolveAnimationKey(normalized: string): AnimationKey {
   if (normalized.includes("thunder") || normalized.includes("squall") || normalized.includes("tornado")) {
@@ -98,49 +97,50 @@ function resolveFallbackIcon(normalized: string) {
 export function WeatherIconMotion({ condition }: WeatherIconMotionProps) {
   const normalized = useMemo(() => condition.trim().toLowerCase(), [condition]);
   const animationKey = useMemo(() => resolveAnimationKey(normalized), [normalized]);
+  const animationSrc = useMemo(() => animationSrcByKey[animationKey], [animationKey]);
   const fallbackIcon = useMemo(() => resolveFallbackIcon(normalized), [normalized]);
-  const [animationData, setAnimationData] = useState<string | null>(
-    animationCache.get(animationKey) ?? null
-  );
+  const cleanupRef = useRef<(() => void) | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    let active = true;
+    setIsLoaded(false);
     setFailed(false);
+  }, [animationKey]);
 
-    const cached = animationCache.get(animationKey);
-    if (cached) {
-      setAnimationData(cached);
-      return () => {
-        active = false;
-      };
+  const handleDotLottieRef = useCallback((instance: DotLottie | null) => {
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+
+    if (!instance) {
+      return;
     }
 
-    setAnimationData(null);
-
-    const loadAnimation = async () => {
-      try {
-        const animationModule = await animationImporters[animationKey]();
-        const raw = animationModule.default ?? animationModule;
-        const data = typeof raw === "string" ? raw : JSON.stringify(raw);
-        animationCache.set(animationKey, data);
-        if (active) {
-          setAnimationData(data);
-        }
-      } catch {
-        if (active) {
-          setFailed(true);
-          setAnimationData(null);
-        }
-      }
+    const handleLoad = () => {
+      setIsLoaded(true);
+      setFailed(false);
     };
 
-    void loadAnimation();
+    const handleLoadError = () => {
+      setFailed(true);
+      setIsLoaded(false);
+    };
 
+    instance.addEventListener("load", handleLoad);
+    instance.addEventListener("loadError", handleLoadError);
+
+    cleanupRef.current = () => {
+      instance.removeEventListener("load", handleLoad);
+      instance.removeEventListener("loadError", handleLoadError);
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
-      active = false;
+      cleanupRef.current?.();
+      cleanupRef.current = null;
     };
-  }, [animationKey]);
+  }, []);
 
   return (
     <m.div
@@ -149,15 +149,16 @@ export function WeatherIconMotion({ condition }: WeatherIconMotionProps) {
       transition={{ type: "spring", stiffness: 220, damping: 20 }}
       className="relative flex h-24 w-24 items-center justify-center"
     >
-      {(!animationData || failed) ? (
+      {!isLoaded || failed ? (
         <div className="absolute inset-0 flex items-center justify-center">{fallbackIcon}</div>
       ) : null}
-      {!failed && animationData ? (
+      {!failed ? (
         <DotLottieReact
-          data={animationData}
+          src={animationSrc}
           loop
           autoplay
-          className="relative z-10 h-24 w-24"
+          dotLottieRefCallback={handleDotLottieRef}
+          className={`relative z-10 h-24 w-24 ${isLoaded ? "opacity-100" : "opacity-0"}`}
         />
       ) : null}
     </m.div>

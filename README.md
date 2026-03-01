@@ -34,7 +34,7 @@ Production-ready weather application built with Next.js App Router, TypeScript, 
 - 24-hour trend chart with time + temperature scale
 - Lazy-loaded interactive map
 - Framer Motion optimized with `LazyMotion` + `m` primitives to reduce initial animation payload
-- Weather Lottie assets are condition-loaded (on-demand JSON chunk per weather type)
+- Weather animations use compressed `.lottie` assets and load by condition via `src` paths
 - Adaptive low-power mode with hydration-safe detection: reduces heavy scene effects, defers chart work to idle, and loads map on demand
 - PWA support (manifest, service worker, offline fallback route)
 
