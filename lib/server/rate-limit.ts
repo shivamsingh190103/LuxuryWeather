@@ -84,9 +84,18 @@ export async function enforceRateLimit(
 }
 
 export function getRequestIdentifier(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const nextRequestIp = (request as Request & { ip?: string }).ip?.trim();
   const realIp = request.headers.get("x-real-ip")?.trim();
-  const country = request.headers.get("x-vercel-ip-country")?.trim();
+  const vercelForwarded = request.headers.get("x-vercel-forwarded-for")?.trim();
+  const xForwardedFor = request.headers.get("x-forwarded-for");
+  const forwardedChain = xForwardedFor
+    ? xForwardedFor
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+    : [];
+  const trustedForwardedIp =
+    forwardedChain.length > 0 ? forwardedChain[forwardedChain.length - 1] : null;
 
-  return forwarded || realIp || country || "anonymous";
+  return nextRequestIp || realIp || vercelForwarded || trustedForwardedIp || "127.0.0.1";
 }

@@ -22,12 +22,34 @@ const WEATHER_KEY_PREFIX = "weather:";
 
 export class WeatherClientError extends Error {
   status?: number;
+  retryAfterSeconds?: number;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, retryAfterSeconds?: number) {
     super(message);
     this.name = "WeatherClientError";
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+function parseRetryAfterSeconds(headers: Headers) {
+  const retryAfter = headers.get("retry-after");
+  if (!retryAfter) {
+    return undefined;
+  }
+
+  const numeric = Number(retryAfter);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return Math.ceil(numeric);
+  }
+
+  const parsedDate = Date.parse(retryAfter);
+  if (Number.isFinite(parsedDate)) {
+    const secondsUntilDate = Math.ceil((parsedDate - Date.now()) / 1000);
+    return secondsUntilDate > 0 ? secondsUntilDate : 1;
+  }
+
+  return undefined;
 }
 
 export function buildWeatherApiUrl(query: WeatherQuery) {
@@ -183,7 +205,7 @@ export async function fetchWeather(query: WeatherQuery): Promise<WeatherPayload>
 
   if (!response.ok) {
     const message = "error" in body && body.error ? body.error : "Unable to fetch weather";
-    throw new WeatherClientError(message, response.status);
+    throw new WeatherClientError(message, response.status, parseRetryAfterSeconds(response.headers));
   }
 
   return body as WeatherPayload;

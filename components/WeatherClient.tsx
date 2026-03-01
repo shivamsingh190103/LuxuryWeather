@@ -110,12 +110,32 @@ function formatUpdatedText(timestamp: number) {
   return `Updated ${days}d ago`;
 }
 
+function parseRetryAfterSeconds(headers: Headers) {
+  const retryAfter = headers.get("retry-after");
+  if (!retryAfter) {
+    return 1;
+  }
+
+  const parsed = Number(retryAfter);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.ceil(parsed);
+  }
+
+  const parsedDate = Date.parse(retryAfter);
+  if (Number.isFinite(parsedDate)) {
+    return Math.max(1, Math.ceil((parsedDate - Date.now()) / 1000));
+  }
+
+  return 1;
+}
+
 export function WeatherClient() {
   const searchRef = useRef<SearchBarRef>(null);
   const requestCounter = useRef(0);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const suggestionsCacheRef = useRef(new Map<string, CitySuggestion[]>());
   const prefetchedSuggestionsRef = useRef(new Set<string>());
+  const prefetchCooldownUntilRef = useRef(0);
   const hoverPrefetchTimerRef = useRef<number | null>(null);
   const suppressNextDebounceRef = useRef(false);
   const suppressNextSuggestionsFetchRef = useRef(false);
@@ -131,12 +151,37 @@ export function WeatherClient() {
   const [notice, setNotice] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [lastQuery, setLastQuery] = useState<WeatherQuery>({ city: DEFAULT_CITY });
+  const [weatherRetryUntil, setWeatherRetryUntil] = useState<number | null>(null);
+  const [weatherRetryRemaining, setWeatherRetryRemaining] = useState<number | null>(null);
 
   const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   const [debouncedQuery] = useDebounce(query, 500);
+  const weatherCooldownActive = weatherRetryRemaining !== null;
+
+  useEffect(() => {
+    if (!weatherRetryUntil) {
+      setWeatherRetryRemaining(null);
+      return;
+    }
+
+    const updateRemaining = () => {
+      const remaining = Math.ceil((weatherRetryUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setWeatherRetryUntil(null);
+        setWeatherRetryRemaining(null);
+        return;
+      }
+
+      setWeatherRetryRemaining(remaining);
+    };
+
+    updateRemaining();
+    const timer = window.setInterval(updateRemaining, 1000);
+    return () => window.clearInterval(timer);
+  }, [weatherRetryUntil]);
 
   const clearHoverPrefetchTimer = useCallback(() => {
     if (hoverPrefetchTimerRef.current !== null) {
@@ -202,6 +247,16 @@ export function WeatherClient() {
       }
 
       if (unknownError instanceof WeatherClientError) {
+        if (unknownError.status === 429) {
+          const retryAfterSeconds = Math.max(1, unknownError.retryAfterSeconds ?? 30);
+          setWeatherRetryUntil(Date.now() + retryAfterSeconds * 1000);
+
+          if (!cachedEntry) {
+            setError(`Too many requests. Please retry in ${retryAfterSeconds}s.`);
+          }
+          return;
+        }
+
         if (!cachedEntry || unknownError.status === 404 || unknownError.status === 400) {
           setError(unknownError.message);
         }
@@ -216,20 +271,34 @@ export function WeatherClient() {
   }, []);
 
   const prefetchSuggestion = useCallback(async (suggestion: CitySuggestion) => {
+    if (Date.now() < prefetchCooldownUntilRef.current) {
+      return;
+    }
+
     const prefetchKey = `${suggestion.lat.toFixed(3)}:${suggestion.lon.toFixed(3)}`;
     if (prefetchedSuggestionsRef.current.has(prefetchKey)) {
       return;
     }
 
-    prefetchedSuggestionsRef.current.add(prefetchKey);
-
     try {
-      await fetch(
+      const response = await fetch(
         `/api/weather/prefetch?lat=${encodeURIComponent(String(suggestion.lat))}&lon=${encodeURIComponent(String(suggestion.lon))}`,
         { cache: "no-store" }
       );
+
+      if (response.status === 429) {
+        const retryAfterSeconds = parseRetryAfterSeconds(response.headers);
+        prefetchCooldownUntilRef.current = Date.now() + retryAfterSeconds * 1000;
+        return;
+      }
+
+      if (!response.ok) {
+        return;
+      }
+
+      prefetchedSuggestionsRef.current.add(prefetchKey);
     } catch {
-      prefetchedSuggestionsRef.current.delete(prefetchKey);
+      // Silent by design: background prefetch should never surface errors.
     }
   }, []);
 
@@ -287,8 +356,12 @@ export function WeatherClient() {
       return;
     }
 
+    if (weatherCooldownActive) {
+      return;
+    }
+
     void loadWeather({ city: trimmed });
-  }, [debouncedQuery, loadWeather]);
+  }, [debouncedQuery, loadWeather, weatherCooldownActive]);
 
   useEffect(() => {
     const trimmed = debouncedQuery.trim();
@@ -379,6 +452,10 @@ export function WeatherClient() {
   }, [clearHoverPrefetchTimer]);
 
   const retry = () => {
+    if (weatherCooldownActive) {
+      return;
+    }
+
     void loadWeather(lastQuery, true);
   };
 
@@ -422,6 +499,10 @@ export function WeatherClient() {
               }}
               onSubmit={(value) => {
                 if (value.length >= 2) {
+                  if (weatherCooldownActive) {
+                    return;
+                  }
+
                   setSuggestionsOpen(false);
                   suppressNextDebounceRef.current = true;
                   suppressNextSuggestionsFetchRef.current = true;
@@ -461,6 +542,10 @@ export function WeatherClient() {
                           }}
                           onMouseLeave={clearHoverPrefetchTimer}
                           onClick={() => {
+                            if (weatherCooldownActive) {
+                              return;
+                            }
+
                             clearHoverPrefetchTimer();
                             suppressNextDebounceRef.current = true;
                             suppressNextSuggestionsFetchRef.current = true;
@@ -515,6 +600,14 @@ export function WeatherClient() {
                     className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 shadow-2xl backdrop-blur-2xl"
                   >
                     {notice}
+                  </motion.div>
+                )}
+                {weatherRetryRemaining !== null && (
+                  <motion.div
+                    variants={childVariants}
+                    className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90 shadow-2xl backdrop-blur-2xl"
+                  >
+                    Cooling down requests. Try again in {weatherRetryRemaining}s.
                   </motion.div>
                 )}
                 {error && (
@@ -585,7 +678,8 @@ export function WeatherClient() {
                   whileHover={canHover ? { scale: 1.03 } : undefined}
                   whileTap={{ scale: 0.97 }}
                   onClick={retry}
-                  className="hover-lift inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-medium text-white"
+                  disabled={weatherCooldownActive}
+                  className="hover-lift inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
                   type="button"
                 >
                   <RefreshCcw className="h-3.5 w-3.5" />
