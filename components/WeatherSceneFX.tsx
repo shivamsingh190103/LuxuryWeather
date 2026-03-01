@@ -442,7 +442,7 @@ export function WeatherSceneFX({ condition, icon, isOffline = false }: WeatherSc
     <div
       className="pointer-events-none fixed inset-0 z-[2] overflow-hidden transition-[filter,opacity] duration-700"
       style={{
-        filter: isOffline ? "grayscale(0.45) saturate(0.75)" : "grayscale(0) saturate(1)",
+        filter: isOffline ? "grayscale(0.45) saturate(0.75)" : undefined,
         opacity: isOffline ? 0.7 : 1
       }}
     >

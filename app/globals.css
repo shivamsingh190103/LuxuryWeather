@@ -16,6 +16,9 @@ body {
   min-height: 100%;
   color: #f6fbff;
   background: #040712;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .mesh-background {
@@ -30,6 +33,11 @@ body {
   background-size: 180% 180%, 180% 180%, 200% 200%, 100% 100%;
   animation: mesh-flow 45s ease-in-out infinite;
   filter: saturate(120%);
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 @keyframes mesh-flow {
@@ -52,6 +60,10 @@ body {
   box-shadow:
     0 22px 80px rgba(0, 0, 0, 0.35),
     inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .hover-lift {
@@ -67,4 +79,16 @@ body {
 .leaflet-container {
   background: #081029;
   border-radius: 1rem;
+}
+
+.temp-display {
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+  text-shadow: 0 10px 34px rgba(5, 10, 22, 0.42);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .mesh-background {
+    animation-duration: 72s;
+  }
 }

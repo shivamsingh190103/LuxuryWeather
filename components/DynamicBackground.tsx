@@ -2,6 +2,7 @@
 
 import { AnimatePresence, m, useScroll, useTransform } from "framer-motion";
 import { useMemo } from "react";
+import { useCanHover } from "@/hooks/useCanHover";
 
 type DynamicBackgroundProps = {
   condition: string;
@@ -120,6 +121,7 @@ function resolveScene(condition: string, isNight: boolean): SceneMode {
 }
 
 export function DynamicBackground({ condition, icon, isOffline = false }: DynamicBackgroundProps) {
+  const canHover = useCanHover();
   const { scrollY } = useScroll();
   const parallaxY = useTransform(scrollY, [0, 1200], [0, -48]);
   const softParallaxY = useTransform(scrollY, [0, 1200], [0, -24]);
@@ -143,9 +145,9 @@ export function DynamicBackground({ condition, icon, isOffline = false }: Dynami
           transition={{ duration: 1.05, ease: "easeInOut" }}
           className="absolute inset-0"
           style={{
-            y: parallaxY,
+            y: canHover ? parallaxY : undefined,
             backgroundImage: theme.gradient,
-            filter: isOffline ? "grayscale(0.5) saturate(0.72)" : "grayscale(0) saturate(1)",
+            filter: isOffline ? "grayscale(0.5) saturate(0.72)" : undefined,
             transition: "filter 800ms ease"
           }}
         />
@@ -154,7 +156,7 @@ export function DynamicBackground({ condition, icon, isOffline = false }: Dynami
       <m.div
         className="absolute inset-0"
         style={{
-          y: softParallaxY,
+          y: canHover ? softParallaxY : undefined,
           backgroundImage: theme.glow,
           opacity: isOffline ? 0.5 : 0.95,
           transition: "opacity 800ms ease"

@@ -306,7 +306,7 @@ export function WeatherClient() {
         setWeather(cachedEntry.data);
         setLastUpdatedAt(cachedEntry.timestamp);
         if (!offline) {
-          setNotice("Showing cached weather from the latest successful load.");
+          setNotice("Showing your latest saved sky while we reconnect.");
         }
       }
 
@@ -316,16 +316,26 @@ export function WeatherClient() {
           setWeatherRetryUntil(Date.now() + retryAfterSeconds * 1000);
 
           if (!cachedEntry) {
-            setError(`Too many requests. Please retry in ${retryAfterSeconds}s.`);
+            setError(`The forecast is catching its breath. Try again in ${retryAfterSeconds}s.`);
           }
           return;
         }
 
-        if (!cachedEntry || unknownError.status === 404 || unknownError.status === 400) {
-          setError(unknownError.message);
+        if (unknownError.status === 404) {
+          setError("We could not find that place. Try a nearby city.");
+          return;
+        }
+
+        if (unknownError.status === 400) {
+          setError("Try searching with a city name.");
+          return;
+        }
+
+        if (!cachedEntry) {
+          setError("We are having trouble reaching the sky right now. Give us a moment.");
         }
       } else if (!cachedEntry) {
-        setError("Unable to load weather data right now. Please retry.");
+        setError("We are having trouble reaching the sky right now. Give us a moment.");
       }
     } finally {
       if (currentRequest === requestCounter.current) {
@@ -538,7 +548,7 @@ export function WeatherClient() {
         icon={weather?.current.icon ?? "01d"}
         isOffline={!isOnline}
       />
-      {isLowPowerModeResolved && !isLowPowerMode ? (
+      {isLowPowerModeResolved && !isLowPowerMode && canHover ? (
         <WeatherSceneFX
           condition={weather?.current.condition ?? "Clear"}
           icon={weather?.current.icon ?? "01d"}
@@ -673,7 +683,7 @@ export function WeatherClient() {
                     variants={childVariants}
                     className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90 shadow-2xl backdrop-blur-2xl"
                   >
-                    Cooling down requests. Try again in {weatherRetryRemaining}s.
+                    We are refreshing the sky. Try again in {weatherRetryRemaining}s.
                   </m.div>
                 )}
                 {error && (
@@ -687,19 +697,28 @@ export function WeatherClient() {
 
                 <m.div variants={childVariants} className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="inline-flex items-center gap-1 text-sm text-white/70">
+                    <p className="inline-flex items-center gap-1.5 text-sm">
                       <MapPin className="h-4 w-4 text-sky-200" />
-                      {weather.location.name}, {weather.location.country}
+                      <span className="font-medium tracking-[0.01em] text-white/92">
+                        {weather.location.name}
+                      </span>
+                      <span className="text-white/35">/</span>
+                      <span className="text-[11px] uppercase tracking-[0.18em] text-white/58">
+                        {weather.location.country}
+                      </span>
                     </p>
 
-                    <h1 className="mt-3 text-6xl font-bold leading-none tracking-tight sm:text-7xl">
-                      <AnimatedTemperature value={weather.current.temp} />
+                    <h1 className="mt-3 leading-[0.88] sm:mt-4">
+                      <AnimatedTemperature
+                        value={weather.current.temp}
+                        className="temp-display inline-block text-[5.25rem] font-semibold tracking-[-0.045em] text-white sm:text-[6.5rem]"
+                      />
                     </h1>
 
-                    <p className="mt-2 text-sm uppercase tracking-wider text-white/65">
+                    <p className="mt-2 text-xs uppercase tracking-[0.2em] text-white/60">
                       {weather.current.condition}
                     </p>
-                    <p className="mt-1 text-base capitalize text-white/85">
+                    <p className="mt-1 text-[1.03rem] capitalize text-white/88">
                       {weather.current.description}
                     </p>
                   </div>
