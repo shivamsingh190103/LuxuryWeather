@@ -173,6 +173,7 @@ export function WeatherClient() {
 
   const [debouncedQuery] = useDebounce(query, 500);
   const weatherCooldownActive = weatherRetryRemaining !== null;
+  const reducedMotionMode = isLowPowerModeResolved && isLowPowerMode;
 
   useEffect(() => {
     if (!weatherRetryUntil) {
@@ -547,6 +548,7 @@ export function WeatherClient() {
         condition={weather?.current.condition ?? "Clear"}
         icon={weather?.current.icon ?? "01d"}
         isOffline={!isOnline}
+        reducedMotion={reducedMotionMode}
       />
       {isLowPowerModeResolved && !isLowPowerMode && canHover ? (
         <WeatherSceneFX
@@ -567,6 +569,7 @@ export function WeatherClient() {
             <SearchBar
               ref={searchRef}
               value={query}
+              reducedMotion={reducedMotionMode}
               onChange={(value) => {
                 setQuery(value);
                 if (value.trim().length >= 2) {
@@ -591,10 +594,10 @@ export function WeatherClient() {
             <AnimatePresence>
               {suggestionsOpen && query.trim().length >= 2 && (suggestionsLoading || suggestions.length > 0) ? (
                 <m.div
-                  initial={{ opacity: 0, y: 8, scale: 0.985 }}
+                  initial={reducedMotionMode ? false : { opacity: 0, y: 8, scale: 0.985 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.985 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  exit={reducedMotionMode ? undefined : { opacity: 0, y: 8, scale: 0.985 }}
+                  transition={reducedMotionMode ? { duration: 0 } : { duration: 0.18, ease: "easeOut" }}
                   className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-2xl"
                 >
                   {suggestionsLoading ? (
@@ -608,8 +611,8 @@ export function WeatherClient() {
                       {suggestions.map((suggestion) => (
                         <m.li
                           key={`${suggestion.lat}:${suggestion.lon}`}
-                          whileHover={canHover ? { scale: 1.01 } : undefined}
-                          whileTap={{ scale: 0.98 }}
+                          whileHover={!reducedMotionMode && canHover ? { scale: 1.01 } : undefined}
+                          whileTap={!reducedMotionMode ? { scale: 0.98 } : undefined}
                           onMouseEnter={() => {
                             clearHoverPrefetchTimer();
                             hoverPrefetchTimerRef.current = window.setTimeout(() => {
@@ -645,9 +648,9 @@ export function WeatherClient() {
         </div>
 
         <m.div
-          initial={{ opacity: 0, y: 26 }}
+          initial={reducedMotionMode ? false : { opacity: 0, y: 26 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: "easeOut" }}
+          transition={reducedMotionMode ? { duration: 0 } : { duration: 0.55, ease: "easeOut" }}
           className="w-full"
         >
           <GlassCard className="md:px-8 md:pb-8 md:pt-7">
@@ -658,8 +661,8 @@ export function WeatherClient() {
                 <p className="text-lg font-semibold">Couldn&apos;t load weather</p>
                 <p className="text-sm text-white/70">{error}</p>
                 <m.button
-                  whileHover={canHover ? { scale: 1.03 } : undefined}
-                  whileTap={{ scale: 0.97 }}
+                  whileHover={!reducedMotionMode && canHover ? { scale: 1.03 } : undefined}
+                  whileTap={!reducedMotionMode ? { scale: 0.97 } : undefined}
                   onClick={retry}
                   className="hover-lift inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium"
                   type="button"
@@ -669,10 +672,15 @@ export function WeatherClient() {
                 </m.button>
               </div>
             ) : weather ? (
-              <m.div variants={cardVariants} initial="hidden" animate="show" className="space-y-6">
+              <m.div
+                variants={reducedMotionMode ? undefined : cardVariants}
+                initial={reducedMotionMode ? false : "hidden"}
+                animate={reducedMotionMode ? undefined : "show"}
+                className="space-y-6"
+              >
                 {notice && (
                   <m.div
-                    variants={childVariants}
+                    variants={reducedMotionMode ? undefined : childVariants}
                     className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 shadow-2xl backdrop-blur-2xl"
                   >
                     {notice}
@@ -680,7 +688,7 @@ export function WeatherClient() {
                 )}
                 {weatherRetryRemaining !== null && (
                   <m.div
-                    variants={childVariants}
+                    variants={reducedMotionMode ? undefined : childVariants}
                     className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90 shadow-2xl backdrop-blur-2xl"
                   >
                     We are refreshing the sky. Try again in {weatherRetryRemaining}s.
@@ -688,14 +696,17 @@ export function WeatherClient() {
                 )}
                 {error && (
                   <m.div
-                    variants={childVariants}
+                    variants={reducedMotionMode ? undefined : childVariants}
                     className="rounded-2xl border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs text-red-100/90 shadow-2xl backdrop-blur-2xl"
                   >
                     {error}
                   </m.div>
                 )}
 
-                <m.div variants={childVariants} className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <m.div
+                  variants={reducedMotionMode ? undefined : childVariants}
+                  className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+                >
                   <div>
                     <p className="inline-flex items-center gap-1.5 text-sm">
                       <MapPin className="h-4 w-4 text-sky-200" />
@@ -711,6 +722,7 @@ export function WeatherClient() {
                     <h1 className="mt-3 leading-[0.88] sm:mt-4">
                       <AnimatedTemperature
                         value={weather.current.temp}
+                        reducedMotion={reducedMotionMode}
                         className="temp-display inline-block text-[5.25rem] font-semibold tracking-[-0.045em] text-white sm:text-[6.5rem]"
                       />
                     </h1>
@@ -735,7 +747,7 @@ export function WeatherClient() {
                   </div>
                 </m.div>
 
-                <m.div variants={childVariants}>
+                <m.div variants={reducedMotionMode ? undefined : childVariants}>
                   <WeatherMetrics
                     humidity={weather.current.humidity}
                     wind={weather.current.wind}
@@ -745,7 +757,7 @@ export function WeatherClient() {
                 </m.div>
 
                 <m.section
-                  variants={childVariants}
+                  variants={reducedMotionMode ? undefined : childVariants}
                   className="rounded-2xl border border-white/10 bg-white/5 p-3 shadow-2xl backdrop-blur-2xl md:p-4"
                 >
                   <h2 className="mb-2 text-xs uppercase tracking-widest text-white/60">
@@ -758,7 +770,10 @@ export function WeatherClient() {
                   )}
                 </m.section>
 
-                <m.section variants={childVariants} className="space-y-2">
+                <m.section
+                  variants={reducedMotionMode ? undefined : childVariants}
+                  className="space-y-2"
+                >
                   <h2 className="text-xs uppercase tracking-widest text-white/60">Map</h2>
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-2 shadow-2xl backdrop-blur-2xl">
                     {mapEnabled ? (
@@ -770,8 +785,8 @@ export function WeatherClient() {
                     ) : isLowPowerModeResolved && isLowPowerMode ? (
                       <div className="flex h-52 items-center justify-center">
                         <m.button
-                          whileHover={canHover ? { scale: 1.03 } : undefined}
-                          whileTap={{ scale: 0.97 }}
+                          whileHover={!reducedMotionMode && canHover ? { scale: 1.03 } : undefined}
+                          whileTap={!reducedMotionMode ? { scale: 0.97 } : undefined}
                           onClick={() => setMapEnabled(true)}
                           type="button"
                           className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/90"
@@ -786,9 +801,9 @@ export function WeatherClient() {
                 </m.section>
 
                 <m.button
-                  variants={childVariants}
-                  whileHover={canHover ? { scale: 1.03 } : undefined}
-                  whileTap={{ scale: 0.97 }}
+                  variants={reducedMotionMode ? undefined : childVariants}
+                  whileHover={!reducedMotionMode && canHover ? { scale: 1.03 } : undefined}
+                  whileTap={!reducedMotionMode ? { scale: 0.97 } : undefined}
                   onClick={retry}
                   disabled={weatherCooldownActive}
                   className="hover-lift inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -806,10 +821,10 @@ export function WeatherClient() {
       <AnimatePresence>
         {offlineTimestamp ? (
           <m.p
-            initial={{ opacity: 0 }}
+            initial={reducedMotionMode ? false : { opacity: 0 }}
             animate={{ opacity: 0.35 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.7, ease: "easeInOut" }}
+            exit={reducedMotionMode ? undefined : { opacity: 0 }}
+            transition={reducedMotionMode ? { duration: 0 } : { duration: 0.7, ease: "easeInOut" }}
             className="pointer-events-none fixed bottom-3 right-4 z-20 text-[11px] text-white/30"
           >
             {offlineTimestamp}

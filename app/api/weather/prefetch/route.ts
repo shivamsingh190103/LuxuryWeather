@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WeatherServiceError, getWeatherPayload } from "@/lib/server/weather-service";
+import { logServerError } from "@/lib/server/logger";
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.error("Weather prefetch failed", error);
+    logServerError("Weather prefetch failed", error);
     return NextResponse.json(
       { error: "Prefetch failed" },
       { status: 500, headers: rateLimit.headers }

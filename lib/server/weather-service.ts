@@ -1,5 +1,6 @@
 import type { WeatherPayload } from "@/lib/types";
 import { getOptionalEnv } from "@/lib/server/env";
+import { logServerError } from "@/lib/server/logger";
 import { getRedisClient } from "@/lib/server/redis";
 
 const OPENWEATHER_BASE = "https://api.openweathermap.org";
@@ -313,7 +314,7 @@ export async function getWeatherPayloadWithMeta(
         }
       }
     } catch (error) {
-      console.error("Redis cache read failed for weather endpoint", error);
+      logServerError("Redis cache read failed for weather endpoint", error);
       redisReadFailed = true;
       cacheStatus = "BYPASS";
     }
@@ -332,7 +333,7 @@ export async function getWeatherPayloadWithMeta(
         { ex: WEATHER_CACHE_TTL_SECONDS }
       );
     } catch (error) {
-      console.error("Redis cache write failed for weather endpoint", error);
+      logServerError("Redis cache write failed for weather endpoint", error);
       cacheStatus = "BYPASS";
     }
   }
@@ -372,7 +373,7 @@ export async function getCitySuggestions(query: string): Promise<CitySuggestion[
         }
       }
     } catch (error) {
-      console.error("Redis cache read failed for city suggestions", error);
+      logServerError("Redis cache read failed for city suggestions", error);
     }
   }
 
@@ -414,7 +415,7 @@ export async function getCitySuggestions(query: string): Promise<CitySuggestion[
         { ex: CITY_SUGGESTIONS_CACHE_TTL_SECONDS }
       );
     } catch (error) {
-      console.error("Redis cache write failed for city suggestions", error);
+      logServerError("Redis cache write failed for city suggestions", error);
     }
   }
 

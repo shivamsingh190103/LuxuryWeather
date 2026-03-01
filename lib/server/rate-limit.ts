@@ -1,5 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { getRedisClient } from "@/lib/server/redis";
+import { logServerError } from "@/lib/server/logger";
 
 export type RateLimitTarget = "weather" | "cities" | "prefetch";
 
@@ -15,6 +16,78 @@ const configByTarget: Record<RateLimitTarget, { max: number; window: `${number} 
 };
 
 const ratelimitStore = new Map<RateLimitTarget, Ratelimit>();
+const localLimiterStore = new Map<string, { count: number; resetAt: number }>();
+
+function parseWindowMs(window: `${number} ${"s" | "m" | "h"}`) {
+  const [amountRaw, unit] = window.split(" ");
+  const amount = Number(amountRaw);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 60_000;
+  }
+
+  if (unit === "s") {
+    return amount * 1_000;
+  }
+
+  if (unit === "h") {
+    return amount * 60 * 60 * 1_000;
+  }
+
+  return amount * 60 * 1_000;
+}
+
+function cleanupLocalLimiterStore(now: number) {
+  if (localLimiterStore.size < 1_500) {
+    return;
+  }
+
+  for (const [key, entry] of localLimiterStore) {
+    if (entry.resetAt <= now) {
+      localLimiterStore.delete(key);
+    }
+  }
+}
+
+function enforceLocalRateLimit(
+  target: RateLimitTarget,
+  identifier: string
+): RateLimitResult {
+  const config = configByTarget[target];
+  const windowMs = parseWindowMs(config.window);
+  const now = Date.now();
+  const bucketKey = `${target}:${identifier}`;
+  const existing = localLimiterStore.get(bucketKey);
+  const base =
+    existing && existing.resetAt > now
+      ? existing
+      : {
+          count: 0,
+          resetAt: now + windowMs
+        };
+
+  base.count += 1;
+  localLimiterStore.set(bucketKey, base);
+  cleanupLocalLimiterStore(now);
+
+  const allowed = base.count <= config.max;
+  const remaining = Math.max(0, config.max - base.count);
+  const headers: Record<string, string> = {
+    "x-rate-limit": allowed ? "PASS_LOCAL" : "BLOCK_LOCAL",
+    "x-rate-limit-limit": String(config.max),
+    "x-rate-limit-remaining": String(remaining),
+    "x-rate-limit-reset": String(base.resetAt)
+  };
+
+  if (!allowed) {
+    headers["retry-after"] = String(Math.max(1, Math.ceil((base.resetAt - now) / 1000)));
+  }
+
+  return {
+    allowed,
+    headers
+  };
+}
 
 function getLimiter(target: RateLimitTarget) {
   const existing = ratelimitStore.get(target);
@@ -46,12 +119,7 @@ export async function enforceRateLimit(
   const limiter = getLimiter(target);
 
   if (!limiter) {
-    return {
-      allowed: true,
-      headers: {
-        "x-rate-limit": "BYPASS"
-      }
-    };
+    return enforceLocalRateLimit(target, identifier);
   }
 
   try {
@@ -73,13 +141,8 @@ export async function enforceRateLimit(
       headers
     };
   } catch (error) {
-    console.error(`Rate limiter failed for ${target}. Falling back to allow.`, error);
-    return {
-      allowed: true,
-      headers: {
-        "x-rate-limit": "BYPASS"
-      }
-    };
+    logServerError(`Rate limiter failed for ${target}. Falling back to local limiter.`, error);
+    return enforceLocalRateLimit(target, identifier);
   }
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WeatherServiceError, getWeatherPayloadWithMeta } from "@/lib/server/weather-service";
+import { logServerError } from "@/lib/server/logger";
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.error("Unexpected weather API error", error);
+    logServerError("Unexpected weather API error", error);
     return NextResponse.json(
       { error: "Failed to load weather" },
       { status: 500, headers: rateLimit.headers }

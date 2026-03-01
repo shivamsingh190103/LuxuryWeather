@@ -17,6 +17,7 @@ type SearchBarProps = {
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
   focusTrigger: number;
+  reducedMotion?: boolean;
 };
 
 export type SearchBarRef = {
@@ -24,7 +25,7 @@ export type SearchBarRef = {
 };
 
 export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function SearchBar(
-  { value, onChange, onSubmit, focusTrigger },
+  { value, onChange, onSubmit, focusTrigger, reducedMotion = false },
   ref
 ) {
   const [expanded, setExpanded] = useState(false);
@@ -74,13 +75,17 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
   return (
     <m.div
       animate={{ width: expanded ? expandedWidth : 52 }}
-      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      transition={
+        reducedMotion
+          ? { duration: 0 }
+          : { type: "spring", stiffness: 400, damping: 30 }
+      }
       className="flex h-12 items-center overflow-hidden rounded-full border border-white/15 bg-white/10 px-1.5 backdrop-blur-xl"
     >
       <m.button
         type="button"
-        whileHover={canHover ? { scale: 1.03 } : undefined}
-        whileTap={{ scale: 0.97 }}
+        whileHover={!reducedMotion && canHover ? { scale: 1.03 } : undefined}
+        whileTap={!reducedMotion ? { scale: 0.97 } : undefined}
         onClick={() => {
           setExpanded(true);
           requestAnimationFrame(() => inputRef.current?.focus());
@@ -90,12 +95,13 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
       >
         <Search className="h-4 w-4" />
       </m.button>
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {expanded && (
           <m.div
-            initial={{ opacity: 0, x: 8 }}
+            initial={reducedMotion ? false : { opacity: 0, x: 8 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 8 }}
+            exit={reducedMotion ? undefined : { opacity: 0, x: 8 }}
+            transition={reducedMotion ? { duration: 0 } : undefined}
             className="ml-2 w-full"
           >
             <input

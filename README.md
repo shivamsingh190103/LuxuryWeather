@@ -1,164 +1,153 @@
 # LuxuryWeather
 
-[Live Demo](https://luxury-weather.vercel.app)
+> A weather app on the surface. A systems design exercise underneath.
 
-Production-ready weather platform built with Next.js App Router, TypeScript, Tailwind CSS, and a secure BFF architecture.
+[![Live Demo](https://img.shields.io/badge/Live-Demo-0ea5e9?style=for-the-badge&logo=vercel&logoColor=white)](https://luxury-weather.vercel.app)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-Upstash-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![PWA](https://img.shields.io/badge/PWA-enabled-10b981?style=for-the-badge&logo=googlechrome&logoColor=white)
 
-## Design Philosophy
-> "Design is not just what it looks like and feels like. Design is how it works."
+---
 
-LuxuryWeather was built on the premise that true technical mastery allows the engineering to disappear.  
-Every cache layer, lazy-loaded chunk, and fallback path exists so the user never has to think about them.  
-The app handles the edge cases so the user can simply look at the sky.
+## The Problem I Was Actually Solving
 
-## What This App Delivers
+Most weather apps stop at being API wrappers with a polished UI. I wanted to solve the harder systems question: what does it take to make a small app stay reliable under real-world constraints. In this project, dropped networks, low-battery devices, burst traffic, and API-limit pressure were treated as primary requirements instead of edge cases. The result is a weather app that behaves like a production system, not a demo.
 
-- Instant weather load via geolocation with graceful fallback to `London`.
-- Human-centered weather experience with cinematic glass UI and contextual backgrounds.
-- 24-hour trend chart, AQI, map, and robust search suggestions.
-- Reliable behavior across weak networks, offline states, and mobile devices.
+---
 
-## Architecture Overview
+## Architecture
 
 ```mermaid
 flowchart LR
-  A["Client (Next.js App Router)"] --> B["BFF API Routes (/api/*)"]
-  B --> C["Upstash Redis Cache (TTL 10m)"]
+  A["Client (Next.js App Router)"] --> B["BFF API Routes /api/*"]
+  B --> C["Upstash Redis Cache TTL 10min"]
   B --> D["OpenWeather APIs"]
-  A --> E["IndexedDB Offline Cache"]
-  A --> F["Service Worker + PWA"]
+  A --> E["IndexedDB Weather Snapshots"]
+  A --> F["Service Worker + Cache API"]
+  F --> G["/offline fallback route"]
 ```
 
-## Core Engineering Highlights
+The app follows a Backend-for-Frontend pattern: the browser only talks to internal `/api/*` routes, and those routes own all upstream OpenWeather communication. This keeps request shaping, caching, and rate limiting centralized on the server layer. Because the OpenWeather key is resolved only inside server code, it never needs to be shipped to client bundles.
 
-### Security and Backend (BFF)
-- OpenWeather API key is used only server-side (`process.env.OPENWEATHER_API_KEY`).
-- `GET /api/weather` supports `city` or `lat/lon` and returns a minified payload.
-- AQI is integrated through OpenWeather Air Pollution API.
-- Explicit upstream fallback logic avoids blanket `catch` anti-patterns.
+---
 
-### Caching and Throughput
-- Upstash Redis edge cache with deterministic keys and `EX 600`.
-- CDN-friendly response headers (`public, s-maxage=300, stale-while-revalidate=600`).
-- `X-Cache` observability headers (`HIT | MISS | BYPASS`).
-- Prefetch endpoint warms cache on intentional hover (300ms).
-- Concurrency behavior: if 1,000 users search the same location simultaneously, Redis + CDN edge caching collapse duplicate upstream work so most requests are served as cache hits instead of re-calling OpenWeather.
+## Engineering Decisions (The Interesting Parts)
 
-### Abuse Protection
-- Route-level sliding-window rate limits:
-  - `/api/weather`
-  - `/api/cities`
-  - `/api/weather/prefetch`
-- Retry headers surfaced and consumed by frontend cooldown UX.
+### 1. Collapsing Duplicate Upstream Work
 
-### Offline-First Reliability
-- IndexedDB (`idb-keyval`) stores weather snapshots with TTL handling.
-- Subtle offline mode:
-  - background desaturation
-  - low-opacity `Updated ... ago` timestamp
-- `/offline` route renders last known weather from IndexedDB.
+The weather endpoint uses Redis with deterministic keys and `EX 600` to absorb repeated traffic for identical queries, using `weather:city:${city.toLowerCase()}` for city lookups and `weather:coords:${lat.toFixed(3)}:${lon.toFixed(3)}` for coordinate lookups. Each `/api/weather` response includes `X-Cache: HIT | MISS | BYPASS` so cache behavior is directly observable during debugging and load tests. Search suggestions use hover intent, and after 300ms of deliberate hover, the app calls `/api/weather/prefetch` to warm Redis before selection. Under shared query patterns, Redis plus CDN caching (`s-maxage=300`) collapses duplicate upstream work so most repeated city requests do not reach OpenWeather.
 
-### Performance Engineering
-- Dynamic imports for heavy UI: map, chart, animated weather icon.
-- `LazyMotion` + `m` primitives to reduce Framer Motion critical payload.
-- `.lottie` compressed animation assets loaded by condition (`src=/lottie/*.lottie`).
-- Low-power mode using:
-  - `prefers-reduced-motion`
-  - Network Information API (`saveData`, connection type)
-  - Device Memory API
-- On low-power/touch devices:
-  - heavy scene FX disabled
-  - chart deferred to idle
-  - map becomes on-demand
-  - mobile scroll flicker mitigated by reducing fixed-layer repaint pressure
+### 2. Hardware Empathy
 
-## Product Experience
+`useLowPowerMode.ts` reads `navigator.getBattery()`, `navigator.connection.saveData`, `navigator.deviceMemory`, and `window.matchMedia('(prefers-reduced-motion: reduce)')` to detect constrained environments. When low-power mode is active, the UI shifts to reduced-motion paths, avoids non-essential Framer Motion transitions, skips heavy scene effects, and falls back from Lottie weather animation to static icons. This is intentionally quiet behavior: the app adapts itself without surfacing technical state to the user. The core design choice is that performance adaptation should feel invisible rather than explicit.
 
-- Magnetic expanding search with spring animation and `Cmd/Ctrl + K`.
-- Debounced search (`500ms`) and suggestion prefetch (`300ms` hover intent).
-- Humanized status/error messaging (non-technical language).
-- Refined typographic hierarchy for location, condition, and temperature.
-- Responsive design optimized for smartphone-first interactions.
+### 3. Offline-First, Not Offline-Fallback
 
-## API Endpoints
+Offline reliability uses two complementary layers. Workbox Cache API strategies in the service worker handle runtime/static caching and route document failures to `/offline`, while `idb-keyval` in IndexedDB stores weather snapshots with timestamp-based freshness rules. The `/offline` route then renders last known weather data instead of a generic disconnected screen. In the primary UI, offline state is conveyed subtly through background desaturation and an `Updated X ago` indicator, so degradation is graceful instead of disruptive.
 
-### `GET /api/weather`
-Query:
-- `city=Berlin`
-- or `lat=52.52&lon=13.41`
+### 4. Infrastructure Protection
 
-Returns:
-- `location`: `name`, `country`, `lat`, `lon`
-- `current`: `temp`, `condition`, `description`, `icon`, `humidity`, `wind`, `pressure`, optional `aqi`
-- `aqi` at root level
-- `hourly` (next 24 points): `ts`, `temp`, `condition`, `icon`
+All externally reachable weather-related routes are protected with sliding-window limits: `/api/weather`, `/api/cities`, and `/api/weather/prefetch`. On `429`, the API emits `Retry-After`, and the client consumes that header to enforce visible cooldown timing for direct searches while suppressing noisy failures for background prefetch calls. If Redis is unavailable, the server falls back to an in-process limiter so the endpoints are still capped. The key principle is simple: uncapped public endpoints are an infrastructure risk, not a missing feature.
 
-Errors:
-- `400` missing/invalid params
-- `404` city not found
-- `429` rate limited
-- `500` config/upstream failure
+---
 
-### `GET /api/cities`
-- Geocoding suggestions for search dropdown.
+## Performance Profile
 
-### `GET /api/weather/prefetch`
-- Cache warmup endpoint for hover-intent suggestion prefetch.
-- Returns `204` on success.
+| Metric | Result |
+|--------|--------|
+| Largest JS chunk | ~390 KB uncompressed |
+| TypeScript errors | 0 |
+| Cache TTL | 600s (Redis) + 300s (CDN s-maxage) |
+| Offline support | Full (IndexedDB + Service Worker) |
+| Rate limiting | Sliding window, all API routes |
 
-## Tech Stack
+---
 
-- Next.js 14 (App Router)
-- TypeScript
-- Tailwind CSS
-- Framer Motion
-- Lucide React
-- Recharts
-- React-Leaflet + Leaflet
-- `@lottiefiles/dotlottie-react`
-- `@upstash/redis`
-- `@upstash/ratelimit`
-- `idb-keyval`
-- `use-debounce`
-- `next-pwa`
+## What I'd Do Differently at 10x Scale
+
+At significantly higher scale, I would move from a single serverless Redis dependency to region-aware cache placement to reduce tail latency across geographies. I would also add a queue-based strategy for burst handling so selected requests can be deferred instead of immediately rejected on 429 during spikes. Observability would be expanded with end-to-end OpenTelemetry traces across the BFF layer and upstream calls to make cache effectiveness and failure modes measurable per route. Finally, I would evaluate edge rendering with geolocation-aware defaults so first paint can arrive with weather context before interaction.
+
+---
 
 ## Local Development
 
-### 1) Install
+### Prerequisites
+- Node.js 18+
+- Upstash Redis account (free tier works)
+- OpenWeatherMap API key (free tier works)
+
+### Setup
+
 ```bash
+git clone https://github.com/shivamsingh190103/LuxuryWeather.git
+cd LuxuryWeather
 npm install
 ```
 
-### 2) Configure Environment
 Create `.env.local`:
 
 ```env
-OPENWEATHER_API_KEY=your_openweather_key
+OPENWEATHER_API_KEY=your_key_here
 UPSTASH_REDIS_REST_URL=your_upstash_url
 UPSTASH_REDIS_REST_TOKEN=your_upstash_token
 ```
 
-### 3) Run
 ```bash
 npm run dev
+# Open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+### Production Build
 
-### 4) Production Build
 ```bash
 npm run build
 npm run start
 ```
 
+### Verify Caching
+
+```bash
+# First request — should return X-Cache: MISS
+curl -I http://localhost:3000/api/weather?city=London
+
+# Second request — should return X-Cache: HIT  
+curl -I http://localhost:3000/api/weather?city=London
+```
+
+---
+
 ## Deploying to Vercel
 
-1. Push to GitHub.
-2. Import repo into Vercel.
-3. Add env vars in Vercel project settings:
-   - `OPENWEATHER_API_KEY`
-   - `UPSTASH_REDIS_REST_URL`
-   - `UPSTASH_REDIS_REST_TOKEN`
-4. Deploy.
+1. Push to GitHub
+2. Import repo at vercel.com/new
+3. Add environment variables in Vercel project settings:
+   - OPENWEATHER_API_KEY
+   - UPSTASH_REDIS_REST_URL
+   - UPSTASH_REDIS_REST_TOKEN
+4. Deploy — no code changes required
 
-No code changes are required for deployment.
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 14 (App Router) |
+| Language | TypeScript |
+| Styling | Tailwind CSS |
+| Animations | Framer Motion + Lottie |
+| Charts | Recharts |
+| Map | React-Leaflet |
+| Cache | Upstash Redis |
+| Rate Limiting | @upstash/ratelimit |
+| Offline Storage | idb-keyval (IndexedDB) |
+| PWA | next-pwa + Workbox |
+| Deployment | Vercel |
+
+---
+
+## Author
+
+Built by Shivam Singh — final semester, A.K.G.E.C.  
+[LinkedIn URL] · [GitHub URL](https://github.com/shivamsingh190103/LuxuryWeather)

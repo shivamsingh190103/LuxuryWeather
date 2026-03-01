@@ -8,6 +8,7 @@ type DynamicBackgroundProps = {
   condition: string;
   icon?: string;
   isOffline?: boolean;
+  reducedMotion?: boolean;
 };
 
 type SceneMode =
@@ -120,7 +121,12 @@ function resolveScene(condition: string, isNight: boolean): SceneMode {
   return isNight ? "default-night" : "default-day";
 }
 
-export function DynamicBackground({ condition, icon, isOffline = false }: DynamicBackgroundProps) {
+export function DynamicBackground({
+  condition,
+  icon,
+  isOffline = false,
+  reducedMotion = false
+}: DynamicBackgroundProps) {
   const canHover = useCanHover();
   const { scrollY } = useScroll();
   const parallaxY = useTransform(scrollY, [0, 1200], [0, -48]);
@@ -139,16 +145,16 @@ export function DynamicBackground({ condition, icon, isOffline = false }: Dynami
       <AnimatePresence mode="wait">
         <m.div
           key={scene}
-          initial={{ opacity: 0, scale: 1.03 }}
+          initial={reducedMotion ? false : { opacity: 0, scale: 1.03 }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.985 }}
-          transition={{ duration: 1.05, ease: "easeInOut" }}
+          exit={reducedMotion ? undefined : { opacity: 0, scale: 0.985 }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 1.05, ease: "easeInOut" }}
           className="absolute inset-0"
           style={{
-            y: canHover ? parallaxY : undefined,
+            y: canHover && !reducedMotion ? parallaxY : undefined,
             backgroundImage: theme.gradient,
             filter: isOffline ? "grayscale(0.5) saturate(0.72)" : undefined,
-            transition: "filter 800ms ease"
+            transition: reducedMotion ? "filter 240ms ease" : "filter 800ms ease"
           }}
         />
       </AnimatePresence>
@@ -156,10 +162,10 @@ export function DynamicBackground({ condition, icon, isOffline = false }: Dynami
       <m.div
         className="absolute inset-0"
         style={{
-          y: canHover ? softParallaxY : undefined,
+          y: canHover && !reducedMotion ? softParallaxY : undefined,
           backgroundImage: theme.glow,
           opacity: isOffline ? 0.5 : 0.95,
-          transition: "opacity 800ms ease"
+          transition: reducedMotion ? "opacity 240ms ease" : "opacity 800ms ease"
         }}
       />
 
@@ -168,7 +174,7 @@ export function DynamicBackground({ condition, icon, isOffline = false }: Dynami
         style={{
           backgroundImage: theme.veil,
           opacity: isOffline ? 0.85 : 1,
-          transition: "opacity 800ms ease"
+          transition: reducedMotion ? "opacity 240ms ease" : "opacity 800ms ease"
         }}
       />
     </div>

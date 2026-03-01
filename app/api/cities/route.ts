@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCitySuggestions } from "@/lib/server/weather-service";
+import { logServerError } from "@/lib/server/logger";
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    console.error("City suggestions API failed", error);
+    logServerError("City suggestions API failed", error);
     return NextResponse.json(
       { error: "Failed to fetch city suggestions" },
       { status: 500, headers: rateLimit.headers }

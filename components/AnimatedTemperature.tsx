@@ -6,14 +6,25 @@ import { useEffect, useRef, useState } from "react";
 type AnimatedTemperatureProps = {
   value: number;
   className?: string;
+  reducedMotion?: boolean;
 };
 
-export function AnimatedTemperature({ value, className = "" }: AnimatedTemperatureProps) {
+export function AnimatedTemperature({
+  value,
+  className = "",
+  reducedMotion = false
+}: AnimatedTemperatureProps) {
   const roundedTarget = Math.round(value);
   const previous = useRef(roundedTarget);
   const [display, setDisplay] = useState(roundedTarget);
 
   useEffect(() => {
+    if (reducedMotion) {
+      previous.current = roundedTarget;
+      setDisplay(roundedTarget);
+      return;
+    }
+
     const controls = animate(previous.current, roundedTarget, {
       duration: 0.6,
       ease: "easeOut",
@@ -27,7 +38,11 @@ export function AnimatedTemperature({ value, className = "" }: AnimatedTemperatu
     return () => {
       controls.stop();
     };
-  }, [roundedTarget]);
+  }, [roundedTarget, reducedMotion]);
+
+  if (reducedMotion) {
+    return <span className={className}>{display}°</span>;
+  }
 
   return (
     <AnimatePresence mode="wait">
