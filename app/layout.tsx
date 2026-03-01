@@ -4,6 +4,7 @@ import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import "leaflet/dist/leaflet.css";
+import { MotionProvider } from "@/components/MotionProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -40,8 +41,10 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen font-sans antialiased">
-        <div className="mesh-background" aria-hidden="true" />
-        <div className="relative z-10">{children}</div>
+        <MotionProvider>
+          <div className="mesh-background" aria-hidden="true" />
+          <div className="relative z-10">{children}</div>
+        </MotionProvider>
       </body>
     </html>
   );

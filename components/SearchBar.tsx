@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { Search } from "lucide-react";
 import {
   forwardRef,
@@ -72,12 +72,12 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
   };
 
   return (
-    <motion.div
+    <m.div
       animate={{ width: expanded ? expandedWidth : 52 }}
       transition={{ type: "spring", stiffness: 400, damping: 30 }}
       className="flex h-12 items-center overflow-hidden rounded-full border border-white/15 bg-white/10 px-1.5 backdrop-blur-xl"
     >
-      <motion.button
+      <m.button
         type="button"
         whileHover={canHover ? { scale: 1.03 } : undefined}
         whileTap={{ scale: 0.97 }}
@@ -89,10 +89,10 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
         aria-label="Open search"
       >
         <Search className="h-4 w-4" />
-      </motion.button>
+      </m.button>
       <AnimatePresence>
         {expanded && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, x: 8 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 8 }}
@@ -111,9 +111,9 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
               placeholder="Search city..."
               className="w-full bg-transparent text-sm text-white placeholder:text-white/55 focus:outline-none"
             />
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </m.div>
   );
 });

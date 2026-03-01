@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
+import { AnimatePresence, m, useScroll, useTransform } from "framer-motion";
 import { useMemo } from "react";
 
 type DynamicBackgroundProps = {
@@ -135,7 +135,7 @@ export function DynamicBackground({ condition, icon, isOffline = false }: Dynami
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <AnimatePresence mode="wait">
-        <motion.div
+        <m.div
           key={scene}
           initial={{ opacity: 0, scale: 1.03 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -151,7 +151,7 @@ export function DynamicBackground({ condition, icon, isOffline = false }: Dynami
         />
       </AnimatePresence>
 
-      <motion.div
+      <m.div
         className="absolute inset-0"
         style={{
           y: softParallaxY,
@@ -161,7 +161,7 @@ export function DynamicBackground({ condition, icon, isOffline = false }: Dynami
         }}
       />
 
-      <motion.div
+      <m.div
         className="absolute inset-0"
         style={{
           backgroundImage: theme.veil,

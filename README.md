@@ -33,6 +33,8 @@ Production-ready weather application built with Next.js App Router, TypeScript, 
 - Glassmorphism UI and Lottie weather animations
 - 24-hour trend chart with time + temperature scale
 - Lazy-loaded interactive map
+- Framer Motion optimized with `LazyMotion` + `m` primitives to reduce initial animation payload
+- Adaptive low-power mode: reduces heavy scene effects, defers chart work to idle, and loads map on demand
 - PWA support (manifest, service worker, offline fallback route)
 
 ## Setup

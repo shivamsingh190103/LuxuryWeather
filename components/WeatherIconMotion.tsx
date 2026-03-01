@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { useLottie } from "lottie-react";
 import {
   Cloud,
@@ -11,65 +11,49 @@ import {
   Sun,
   Wind
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import cloudAnimation from "@/public/lottie/cloud.json";
+import drizzleAnimation from "@/public/lottie/drizzle.json";
+import fogAnimation from "@/public/lottie/fog.json";
+import rainAnimation from "@/public/lottie/rain.json";
+import snowAnimation from "@/public/lottie/snow.json";
+import sunAnimation from "@/public/lottie/sun.json";
+import thunderAnimation from "@/public/lottie/thunder.json";
+import { useMemo } from "react";
 
 type WeatherIconMotionProps = {
   condition: string;
+  reducedMotion?: boolean;
 };
 
-const lottieMap: Record<string, string> = {
-  clear: "/lottie/sun.json",
-  clouds: "/lottie/cloud.json",
-  rain: "/lottie/rain.json",
-  snow: "/lottie/snow.json",
-  thunderstorm: "/lottie/thunder.json",
-  drizzle: "/lottie/drizzle.json",
-  mist: "/lottie/fog.json",
-  fog: "/lottie/fog.json",
-  haze: "/lottie/fog.json",
-  smoke: "/lottie/fog.json",
-  dust: "/lottie/fog.json",
-  sand: "/lottie/fog.json",
-  ash: "/lottie/fog.json",
-  squall: "/lottie/thunder.json",
-  tornado: "/lottie/thunder.json"
+const animationMap = {
+  clear: sunAnimation,
+  clouds: cloudAnimation,
+  rain: rainAnimation,
+  snow: snowAnimation,
+  thunderstorm: thunderAnimation,
+  drizzle: drizzleAnimation,
+  fog: fogAnimation
 };
 
-const EMPTY_ANIMATION = {
-  v: "5.7.4",
-  fr: 30,
-  ip: 0,
-  op: 1,
-  w: 1,
-  h: 1,
-  nm: "empty",
-  ddd: 0,
-  assets: [],
-  layers: []
-};
-
-export function WeatherIconMotion({ condition }: WeatherIconMotionProps) {
-  const [animationData, setAnimationData] = useState<object | null>(null);
-  const [failed, setFailed] = useState(false);
-
+export function WeatherIconMotion({ condition, reducedMotion = false }: WeatherIconMotionProps) {
   const normalized = useMemo(() => condition.trim().toLowerCase(), [condition]);
 
-  const lottiePath = useMemo(() => {
-    const weatherGroups: Array<[string[], string]> = [
-      [["thunder", "squall", "tornado"], lottieMap.thunderstorm],
-      [["rain"], lottieMap.rain],
-      [["drizzle"], lottieMap.drizzle],
-      [["snow"], lottieMap.snow],
-      [["mist", "fog", "haze", "smoke", "dust", "sand", "ash"], lottieMap.fog],
-      [["cloud"], lottieMap.clouds],
-      [["clear", "sun"], lottieMap.clear]
+  const animationData = useMemo(() => {
+    const weatherGroups: Array<[string[], object]> = [
+      [["thunder", "squall", "tornado"], animationMap.thunderstorm],
+      [["rain"], animationMap.rain],
+      [["drizzle"], animationMap.drizzle],
+      [["snow"], animationMap.snow],
+      [["mist", "fog", "haze", "smoke", "dust", "sand", "ash"], animationMap.fog],
+      [["cloud"], animationMap.clouds],
+      [["clear", "sun"], animationMap.clear]
     ];
 
     const match = weatherGroups.find(([keywords]) =>
       keywords.some((keyword) => normalized.includes(keyword))
     );
 
-    return match?.[1];
+    return match?.[1] ?? animationMap.clear;
   }, [normalized]);
 
   const fallbackIcon = useMemo(() => {
@@ -108,76 +92,53 @@ export function WeatherIconMotion({ condition }: WeatherIconMotionProps) {
 
   const iconMotion = useMemo(() => {
     if (normalized.includes("clear") || normalized.includes("sun")) {
-      return {
+      return reducedMotion
+        ? {
+            animate: { y: 0, rotate: 0 },
+            transition: { duration: 0 }
+          }
+        : {
         animate: { y: [0, -4, 0], rotate: [0, 3, 0] },
         transition: { repeat: Infinity, duration: 8, ease: "easeInOut" as const }
       };
     }
 
-    return {
+    return reducedMotion
+      ? {
+          animate: { y: 0 },
+          transition: { duration: 0 }
+        }
+      : {
       animate: { y: [0, -6, 0] },
       transition: { repeat: Infinity, duration: 4.6, ease: "easeInOut" as const }
     };
-  }, [normalized]);
+  }, [normalized, reducedMotion]);
 
   const { View } = useLottie({
-    animationData: animationData ?? EMPTY_ANIMATION,
-    loop: true,
-    autoplay: true,
+    animationData,
+    loop: !reducedMotion,
+    autoplay: !reducedMotion,
     style: {
       width: 96,
       height: 96
     }
   });
 
-  useEffect(() => {
-    if (!lottiePath) {
-      setAnimationData(null);
-      setFailed(true);
-      return;
-    }
-
-    const controller = new AbortController();
-    setFailed(false);
-    setAnimationData(null);
-
-    fetch(lottiePath, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Failed to load ${lottiePath}`);
-        }
-        return response.json();
-      })
-      .then((data) => setAnimationData(data as object))
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setAnimationData(null);
-          setFailed(true);
-        }
-      });
-
-    return () => controller.abort();
-  }, [lottiePath]);
-
   return (
-    <motion.div
+    <m.div
       initial={{ scale: 0.85, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ type: "spring", stiffness: 220, damping: 20 }}
       className="relative flex h-24 w-24 items-center justify-center"
     >
-      <motion.div
+      <m.div
         animate={iconMotion.animate}
         transition={iconMotion.transition}
         className="absolute inset-0 flex items-center justify-center"
       >
-        {fallbackIcon}
-      </motion.div>
-      {!failed && animationData ? (
-        <div className="relative z-10">{View}</div>
-      ) : (
-        <div className="relative z-10 h-14 w-14" />
-      )}
-    </motion.div>
+        <div className={reducedMotion ? "opacity-100" : "opacity-45"}>{fallbackIcon}</div>
+      </m.div>
+      {!reducedMotion ? <div className="relative z-10">{View}</div> : null}
+    </m.div>
   );
 }

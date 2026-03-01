@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { Command, MapPin, RefreshCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebounce } from "use-debounce";
@@ -13,6 +13,7 @@ import { SkeletonCard } from "@/components/SkeletonCard";
 import { WeatherMetrics } from "@/components/WeatherMetrics";
 import { WeatherSceneFX } from "@/components/WeatherSceneFX";
 import { useCanHover } from "@/hooks/useCanHover";
+import { useLowPowerMode } from "@/hooks/useLowPowerMode";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { WeatherPayload } from "@/lib/types";
 import {
@@ -129,6 +130,14 @@ function parseRetryAfterSeconds(headers: Headers) {
   return 1;
 }
 
+type WindowWithIdleCallback = Window & {
+  requestIdleCallback?: (
+    callback: IdleRequestCallback,
+    options?: IdleRequestOptions
+  ) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
 export function WeatherClient() {
   const searchRef = useRef<SearchBarRef>(null);
   const requestCounter = useRef(0);
@@ -142,6 +151,7 @@ export function WeatherClient() {
 
   const canHover = useCanHover();
   const isOnline = useOnlineStatus();
+  const isLowPowerMode = useLowPowerMode();
 
   const [query, setQuery] = useState("");
   const [focusTrigger, setFocusTrigger] = useState(0);
@@ -153,6 +163,8 @@ export function WeatherClient() {
   const [lastQuery, setLastQuery] = useState<WeatherQuery>({ city: DEFAULT_CITY });
   const [weatherRetryUntil, setWeatherRetryUntil] = useState<number | null>(null);
   const [weatherRetryRemaining, setWeatherRetryRemaining] = useState<number | null>(null);
+  const [chartReady, setChartReady] = useState(false);
+  const [mapEnabled, setMapEnabled] = useState(false);
 
   const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -182,6 +194,47 @@ export function WeatherClient() {
     const timer = window.setInterval(updateRemaining, 1000);
     return () => window.clearInterval(timer);
   }, [weatherRetryUntil]);
+
+  useEffect(() => {
+    if (!weather) {
+      setChartReady(false);
+      return;
+    }
+
+    let timeoutId: number | undefined;
+    let idleHandle: number | undefined;
+    const activate = () => setChartReady(true);
+
+    const delay = isLowPowerMode ? 900 : 250;
+    const win = window as WindowWithIdleCallback;
+
+    if (win.requestIdleCallback) {
+      idleHandle = win.requestIdleCallback(activate, { timeout: 1500 + delay });
+    } else {
+      timeoutId = window.setTimeout(activate, delay);
+    }
+
+    return () => {
+      if (typeof timeoutId === "number") {
+        window.clearTimeout(timeoutId);
+      }
+      if (typeof idleHandle === "number" && win.cancelIdleCallback) {
+        win.cancelIdleCallback(idleHandle);
+      }
+    };
+  }, [weather, isLowPowerMode]);
+
+  useEffect(() => {
+    if (!weather) {
+      setMapEnabled(false);
+      return;
+    }
+
+    if (!isLowPowerMode) {
+      const timer = window.setTimeout(() => setMapEnabled(true), 220);
+      return () => window.clearTimeout(timer);
+    }
+  }, [weather, isLowPowerMode]);
 
   const clearHoverPrefetchTimer = useCallback(() => {
     if (hoverPrefetchTimerRef.current !== null) {
@@ -474,11 +527,13 @@ export function WeatherClient() {
         icon={weather?.current.icon ?? "01d"}
         isOffline={!isOnline}
       />
-      <WeatherSceneFX
-        condition={weather?.current.condition ?? "Clear"}
-        icon={weather?.current.icon ?? "01d"}
-        isOffline={!isOnline}
-      />
+      {!isLowPowerMode ? (
+        <WeatherSceneFX
+          condition={weather?.current.condition ?? "Clear"}
+          icon={weather?.current.icon ?? "01d"}
+          isOffline={!isOnline}
+        />
+      ) : null}
 
       <div className="relative z-10 w-full">
         <div className="mx-auto mb-4 flex w-full max-w-4xl items-center justify-between px-4 md:px-0">
@@ -514,7 +569,7 @@ export function WeatherClient() {
 
             <AnimatePresence>
               {suggestionsOpen && query.trim().length >= 2 && (suggestionsLoading || suggestions.length > 0) ? (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, y: 8, scale: 0.985 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.985 }}
@@ -530,7 +585,7 @@ export function WeatherClient() {
                   ) : (
                     <ul className="max-h-72 overflow-y-auto p-2">
                       {suggestions.map((suggestion) => (
-                        <motion.li
+                        <m.li
                           key={`${suggestion.lat}:${suggestion.lon}`}
                           whileHover={canHover ? { scale: 1.01 } : undefined}
                           whileTap={{ scale: 0.98 }}
@@ -558,17 +613,17 @@ export function WeatherClient() {
                         >
                           <p className="text-sm font-medium text-white">{suggestion.name}</p>
                           <p className="text-xs text-white/60">{[suggestion.state, suggestion.country].filter(Boolean).join(", ")}</p>
-                        </motion.li>
+                        </m.li>
                       ))}
                     </ul>
                   )}
-                </motion.div>
+                </m.div>
               ) : null}
             </AnimatePresence>
           </div>
         </div>
 
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 26 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: "easeOut" }}
@@ -581,7 +636,7 @@ export function WeatherClient() {
               <div className="space-y-4 text-center">
                 <p className="text-lg font-semibold">Couldn&apos;t load weather</p>
                 <p className="text-sm text-white/70">{error}</p>
-                <motion.button
+                <m.button
                   whileHover={canHover ? { scale: 1.03 } : undefined}
                   whileTap={{ scale: 0.97 }}
                   onClick={retry}
@@ -590,36 +645,36 @@ export function WeatherClient() {
                 >
                   <RefreshCcw className="h-4 w-4" />
                   Retry
-                </motion.button>
+                </m.button>
               </div>
             ) : weather ? (
-              <motion.div variants={cardVariants} initial="hidden" animate="show" className="space-y-6">
+              <m.div variants={cardVariants} initial="hidden" animate="show" className="space-y-6">
                 {notice && (
-                  <motion.div
+                  <m.div
                     variants={childVariants}
                     className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 shadow-2xl backdrop-blur-2xl"
                   >
                     {notice}
-                  </motion.div>
+                  </m.div>
                 )}
                 {weatherRetryRemaining !== null && (
-                  <motion.div
+                  <m.div
                     variants={childVariants}
                     className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90 shadow-2xl backdrop-blur-2xl"
                   >
                     Cooling down requests. Try again in {weatherRetryRemaining}s.
-                  </motion.div>
+                  </m.div>
                 )}
                 {error && (
-                  <motion.div
+                  <m.div
                     variants={childVariants}
                     className="rounded-2xl border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs text-red-100/90 shadow-2xl backdrop-blur-2xl"
                   >
                     {error}
-                  </motion.div>
+                  </m.div>
                 )}
 
-                <motion.div variants={childVariants} className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <m.div variants={childVariants} className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="inline-flex items-center gap-1 text-sm text-white/70">
                       <MapPin className="h-4 w-4 text-sky-200" />
@@ -639,41 +694,64 @@ export function WeatherClient() {
                   </div>
 
                   <div className="self-end sm:self-auto">
-                    <LazyWeatherIconMotion condition={weather.current.condition} />
+                    <LazyWeatherIconMotion
+                      condition={weather.current.condition}
+                      reducedMotion={isLowPowerMode}
+                    />
                   </div>
-                </motion.div>
+                </m.div>
 
-                <motion.div variants={childVariants}>
+                <m.div variants={childVariants}>
                   <WeatherMetrics
                     humidity={weather.current.humidity}
                     wind={weather.current.wind}
                     pressure={weather.current.pressure}
                     aqi={weather.aqi ?? weather.current.aqi}
                   />
-                </motion.div>
+                </m.div>
 
-                <motion.section
+                <m.section
                   variants={childVariants}
                   className="rounded-2xl border border-white/10 bg-white/5 p-3 shadow-2xl backdrop-blur-2xl md:p-4"
                 >
                   <h2 className="mb-2 text-xs uppercase tracking-widest text-white/60">
                     24-hour temperature trend
                   </h2>
-                  <LazyTempTrendChart data={weather.hourly} />
-                </motion.section>
+                  {chartReady ? (
+                    <LazyTempTrendChart data={weather.hourly} />
+                  ) : (
+                    <div className="h-44 animate-pulse rounded-2xl border border-white/10 bg-white/10" />
+                  )}
+                </m.section>
 
-                <motion.section variants={childVariants} className="space-y-2">
+                <m.section variants={childVariants} className="space-y-2">
                   <h2 className="text-xs uppercase tracking-widest text-white/60">Map</h2>
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-2 shadow-2xl backdrop-blur-2xl">
-                    <LazyWeatherMap
-                      lat={weather.location.lat}
-                      lon={weather.location.lon}
-                      city={weather.location.name}
-                    />
+                    {mapEnabled ? (
+                      <LazyWeatherMap
+                        lat={weather.location.lat}
+                        lon={weather.location.lon}
+                        city={weather.location.name}
+                      />
+                    ) : isLowPowerMode ? (
+                      <div className="flex h-52 items-center justify-center">
+                        <m.button
+                          whileHover={canHover ? { scale: 1.03 } : undefined}
+                          whileTap={{ scale: 0.97 }}
+                          onClick={() => setMapEnabled(true)}
+                          type="button"
+                          className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/90"
+                        >
+                          Load interactive map
+                        </m.button>
+                      </div>
+                    ) : (
+                      <div className="h-52 animate-pulse rounded-2xl border border-white/10 bg-white/10" />
+                    )}
                   </div>
-                </motion.section>
+                </m.section>
 
-                <motion.button
+                <m.button
                   variants={childVariants}
                   whileHover={canHover ? { scale: 1.03 } : undefined}
                   whileTap={{ scale: 0.97 }}
@@ -684,16 +762,16 @@ export function WeatherClient() {
                 >
                   <RefreshCcw className="h-3.5 w-3.5" />
                   Refresh
-                </motion.button>
-              </motion.div>
+                </m.button>
+              </m.div>
             ) : null}
           </GlassCard>
-        </motion.div>
+        </m.div>
       </div>
 
       <AnimatePresence>
         {offlineTimestamp ? (
-          <motion.p
+          <m.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.35 }}
             exit={{ opacity: 0 }}
@@ -701,7 +779,7 @@ export function WeatherClient() {
             className="pointer-events-none fixed bottom-3 right-4 z-20 text-[11px] text-white/30"
           >
             {offlineTimestamp}
-          </motion.p>
+          </m.p>
         ) : null}
       </AnimatePresence>
     </main>

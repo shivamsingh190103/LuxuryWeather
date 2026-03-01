@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, animate, motion } from "framer-motion";
+import { AnimatePresence, animate, m } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
 type AnimatedTemperatureProps = {
@@ -31,7 +31,7 @@ export function AnimatedTemperature({ value, className = "" }: AnimatedTemperatu
 
   return (
     <AnimatePresence mode="wait">
-      <motion.span
+      <m.span
         key={roundedTarget}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -40,7 +40,7 @@ export function AnimatedTemperature({ value, className = "" }: AnimatedTemperatu
         className={className}
       >
         {display}°
-      </motion.span>
+      </m.span>
     </AnimatePresence>
   );
 }

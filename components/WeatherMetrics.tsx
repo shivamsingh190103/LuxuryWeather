@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Droplets, Gauge, Wind } from "lucide-react";
 import { AQIDisplay } from "@/components/AQIDisplay";
 import { useCanHover } from "@/hooks/useCanHover";
@@ -36,7 +36,7 @@ export function WeatherMetrics({ humidity, wind, pressure, aqi }: WeatherMetrics
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       {metrics.map((metric) => (
-        <motion.div
+        <m.div
           key={metric.label}
           whileHover={canHover ? { scale: 1.02 } : undefined}
           whileTap={{ scale: 0.97 }}
@@ -45,7 +45,7 @@ export function WeatherMetrics({ humidity, wind, pressure, aqi }: WeatherMetrics
           <metric.icon className="h-4 w-4 text-sky-200" />
           <p className="mt-2 text-[11px] uppercase tracking-wide text-white/60">{metric.label}</p>
           <p className="mt-1 text-sm font-semibold text-white">{metric.value}</p>
-        </motion.div>
+        </m.div>
       ))}
       <AQIDisplay aqi={aqi} />
     </div>
