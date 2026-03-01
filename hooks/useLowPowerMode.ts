@@ -33,10 +33,17 @@ function evaluateLowPowerMode() {
 }
 
 export function useLowPowerMode() {
-  const [isLowPowerMode, setIsLowPowerMode] = useState(true);
+  const [state, setState] = useState({
+    isLowPowerMode: false,
+    isResolved: false
+  });
 
   useEffect(() => {
-    const update = () => setIsLowPowerMode(evaluateLowPowerMode());
+    const update = () =>
+      setState({
+        isLowPowerMode: evaluateLowPowerMode(),
+        isResolved: true
+      });
     update();
 
     if (typeof window === "undefined" || typeof navigator === "undefined") {
@@ -56,5 +63,5 @@ export function useLowPowerMode() {
     };
   }, []);
 
-  return isLowPowerMode;
+  return state;
 }

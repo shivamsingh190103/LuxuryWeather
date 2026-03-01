@@ -10,6 +10,7 @@ import { DynamicBackground } from "@/components/DynamicBackground";
 import { GlassCard } from "@/components/GlassCard";
 import { SearchBar, type SearchBarRef } from "@/components/SearchBar";
 import { SkeletonCard } from "@/components/SkeletonCard";
+import { WeatherIconStatic } from "@/components/WeatherIconStatic";
 import { WeatherMetrics } from "@/components/WeatherMetrics";
 import { WeatherSceneFX } from "@/components/WeatherSceneFX";
 import { useCanHover } from "@/hooks/useCanHover";
@@ -151,7 +152,7 @@ export function WeatherClient() {
 
   const canHover = useCanHover();
   const isOnline = useOnlineStatus();
-  const isLowPowerMode = useLowPowerMode();
+  const { isLowPowerMode, isResolved: isLowPowerModeResolved } = useLowPowerMode();
 
   const [query, setQuery] = useState("");
   const [focusTrigger, setFocusTrigger] = useState(0);
@@ -201,6 +202,11 @@ export function WeatherClient() {
       return;
     }
 
+    if (!isLowPowerModeResolved) {
+      setChartReady(false);
+      return;
+    }
+
     let timeoutId: number | undefined;
     let idleHandle: number | undefined;
     const activate = () => setChartReady(true);
@@ -222,10 +228,15 @@ export function WeatherClient() {
         win.cancelIdleCallback(idleHandle);
       }
     };
-  }, [weather, isLowPowerMode]);
+  }, [weather, isLowPowerMode, isLowPowerModeResolved]);
 
   useEffect(() => {
     if (!weather) {
+      setMapEnabled(false);
+      return;
+    }
+
+    if (!isLowPowerModeResolved) {
       setMapEnabled(false);
       return;
     }
@@ -234,7 +245,7 @@ export function WeatherClient() {
       const timer = window.setTimeout(() => setMapEnabled(true), 220);
       return () => window.clearTimeout(timer);
     }
-  }, [weather, isLowPowerMode]);
+  }, [weather, isLowPowerMode, isLowPowerModeResolved]);
 
   const clearHoverPrefetchTimer = useCallback(() => {
     if (hoverPrefetchTimerRef.current !== null) {
@@ -527,7 +538,7 @@ export function WeatherClient() {
         icon={weather?.current.icon ?? "01d"}
         isOffline={!isOnline}
       />
-      {!isLowPowerMode ? (
+      {isLowPowerModeResolved && !isLowPowerMode ? (
         <WeatherSceneFX
           condition={weather?.current.condition ?? "Clear"}
           icon={weather?.current.icon ?? "01d"}
@@ -694,10 +705,14 @@ export function WeatherClient() {
                   </div>
 
                   <div className="self-end sm:self-auto">
-                    <LazyWeatherIconMotion
-                      condition={weather.current.condition}
-                      reducedMotion={isLowPowerMode}
-                    />
+                    {isLowPowerModeResolved && !isLowPowerMode ? (
+                      <LazyWeatherIconMotion condition={weather.current.condition} />
+                    ) : (
+                      <WeatherIconStatic
+                        condition={weather.current.condition}
+                        animated={!isLowPowerModeResolved || !isLowPowerMode}
+                      />
+                    )}
                   </div>
                 </m.div>
 
@@ -733,7 +748,7 @@ export function WeatherClient() {
                         lon={weather.location.lon}
                         city={weather.location.name}
                       />
-                    ) : isLowPowerMode ? (
+                    ) : isLowPowerModeResolved && isLowPowerMode ? (
                       <div className="flex h-52 items-center justify-center">
                         <m.button
                           whileHover={canHover ? { scale: 1.03 } : undefined}
