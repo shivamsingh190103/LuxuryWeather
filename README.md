@@ -12,7 +12,7 @@ Production-ready weather application built with Next.js App Router, TypeScript, 
 - Lucide React
 - Recharts
 - React-Leaflet + Leaflet
-- lottie-react
+- @lottiefiles/dotlottie-react
 - @upstash/redis
 - idb-keyval
 - use-debounce
@@ -30,7 +30,7 @@ Production-ready weather application built with Next.js App Router, TypeScript, 
 - IndexedDB cache with 10-minute TTL (survives tab/browser restarts)
 - Invisible offline mode with subtle background desaturation + last update timestamp
 - Offline page that renders the latest cached weather snapshot from IndexedDB
-- Glassmorphism UI and Lottie weather animations
+- Glassmorphism UI and dotLottie weather animations
 - 24-hour trend chart with time + temperature scale
 - Lazy-loaded interactive map
 - Framer Motion optimized with `LazyMotion` + `m` primitives to reduce initial animation payload

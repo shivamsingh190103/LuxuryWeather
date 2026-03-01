@@ -1,7 +1,7 @@
 "use client";
 
 import { m } from "framer-motion";
-import { useLottie } from "lottie-react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import {
   Cloud,
   CloudFog,
@@ -19,7 +19,7 @@ type WeatherIconMotionProps = {
 
 type AnimationKey = "clear" | "clouds" | "rain" | "snow" | "thunderstorm" | "drizzle" | "fog";
 
-const animationImporters: Record<AnimationKey, () => Promise<{ default: object }>> = {
+const animationImporters: Record<AnimationKey, () => Promise<{ default: unknown }>> = {
   clear: () => import("@/public/lottie/sun.json"),
   clouds: () => import("@/public/lottie/cloud.json"),
   rain: () => import("@/public/lottie/rain.json"),
@@ -29,7 +29,7 @@ const animationImporters: Record<AnimationKey, () => Promise<{ default: object }
   fog: () => import("@/public/lottie/fog.json")
 };
 
-const animationCache = new Map<AnimationKey, object>();
+const animationCache = new Map<AnimationKey, string>();
 
 function resolveAnimationKey(normalized: string): AnimationKey {
   if (normalized.includes("thunder") || normalized.includes("squall") || normalized.includes("tornado")) {
@@ -95,25 +95,11 @@ function resolveFallbackIcon(normalized: string) {
   return <Cloud className="h-14 w-14 text-slate-100" />;
 }
 
-function LottieLayer({ animationData }: { animationData: object }) {
-  const { View } = useLottie({
-    animationData,
-    loop: true,
-    autoplay: true,
-    style: {
-      width: 96,
-      height: 96
-    }
-  });
-
-  return <div className="relative z-10">{View}</div>;
-}
-
 export function WeatherIconMotion({ condition }: WeatherIconMotionProps) {
   const normalized = useMemo(() => condition.trim().toLowerCase(), [condition]);
   const animationKey = useMemo(() => resolveAnimationKey(normalized), [normalized]);
   const fallbackIcon = useMemo(() => resolveFallbackIcon(normalized), [normalized]);
-  const [animationData, setAnimationData] = useState<object | null>(
+  const [animationData, setAnimationData] = useState<string | null>(
     animationCache.get(animationKey) ?? null
   );
   const [failed, setFailed] = useState(false);
@@ -135,7 +121,8 @@ export function WeatherIconMotion({ condition }: WeatherIconMotionProps) {
     const loadAnimation = async () => {
       try {
         const animationModule = await animationImporters[animationKey]();
-        const data = (animationModule.default ?? animationModule) as object;
+        const raw = animationModule.default ?? animationModule;
+        const data = typeof raw === "string" ? raw : JSON.stringify(raw);
         animationCache.set(animationKey, data);
         if (active) {
           setAnimationData(data);
@@ -162,8 +149,17 @@ export function WeatherIconMotion({ condition }: WeatherIconMotionProps) {
       transition={{ type: "spring", stiffness: 220, damping: 20 }}
       className="relative flex h-24 w-24 items-center justify-center"
     >
-      <div className="absolute inset-0 flex items-center justify-center opacity-45">{fallbackIcon}</div>
-      {!failed && animationData ? <LottieLayer animationData={animationData} /> : null}
+      {(!animationData || failed) ? (
+        <div className="absolute inset-0 flex items-center justify-center">{fallbackIcon}</div>
+      ) : null}
+      {!failed && animationData ? (
+        <DotLottieReact
+          data={animationData}
+          loop
+          autoplay
+          className="relative z-10 h-24 w-24"
+        />
+      ) : null}
     </m.div>
   );
 }
