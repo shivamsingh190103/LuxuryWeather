@@ -13,20 +13,24 @@ Production-ready weather application built with Next.js App Router, TypeScript, 
 - Recharts
 - React-Leaflet + Leaflet
 - lottie-react
+- @upstash/redis
+- idb-keyval
 - use-debounce
 - next-pwa
 
 ## Features
 
 - Secure BFF API route at `/api/weather` (server-side OpenWeather API key usage)
+- Redis edge cache (Upstash) with 10-minute TTL for weather payloads
 - AQI integration via OpenWeather Air Pollution API
 - Geolocation-first load with fallback to `London`
-- Magnetic expanding search bar with spring animation and `Cmd/Ctrl + K`
-- Debounced search (500ms)
-- Session cache with 10-minute TTL
-- Offline page that renders the latest cached weather snapshot
+- Magnetic expanding search bar with spring animation, city suggestions, and `Cmd/Ctrl + K`
+- Debounced search (500ms) + intentional-hover prefetch (300ms) to warm cache
+- IndexedDB cache with 10-minute TTL (survives tab/browser restarts)
+- Invisible offline mode with subtle background desaturation + last update timestamp
+- Offline page that renders the latest cached weather snapshot from IndexedDB
 - Glassmorphism UI and Lottie weather animations
-- 24-hour trend chart (minimal glowing area)
+- 24-hour trend chart with time + temperature scale
 - Lazy-loaded interactive map
 - PWA support (manifest, service worker, offline fallback route)
 
@@ -38,10 +42,12 @@ Production-ready weather application built with Next.js App Router, TypeScript, 
 npm install
 ```
 
-2. Configure environment variable in `.env.local`:
+2. Configure environment variables in `.env.local`:
 
 ```env
 OPENWEATHER_API_KEY=your_key_here
+UPSTASH_REDIS_REST_URL=your_upstash_url_here
+UPSTASH_REDIS_REST_TOKEN=your_upstash_token_here
 ```
 
 3. Run development server:
@@ -79,11 +85,33 @@ Response (minified weather payload):
 - optional top-level `aqi` (mirrors current AQI for flexible clients)
 - hourly: next 24 points (`ts`, `temp`, `condition`, `icon`)
 
+## Redis Caching Strategy
+
+- API route computes a deterministic cache key:
+  - `weather:city:<city>`
+  - `weather:coords:<lat>:<lon>`
+- Upstash Redis is checked before calling OpenWeather.
+- Cache hit returns instantly if data is newer than 10 minutes.
+- Cache miss/stale data fetches from OpenWeather and stores in Redis with `EX 600`.
+- If Redis is unavailable, API falls back to direct OpenWeather fetch and logs the issue without breaking responses.
+
+## Offline Behavior
+
+- Primary client cache is IndexedDB (`idb-keyval`) with 10-minute TTL.
+- When offline, weather data keeps rendering from last cached snapshot.
+- UI avoids intrusive banners and instead:
+  - desaturates background subtly
+  - shows a low-opacity `Updated ... ago` timestamp in the corner
+- Offline fallback route (`/offline`) also reads IndexedDB and displays last known weather.
+
 ## Deploy to Vercel
 
 1. Push this project to GitHub.
 2. Import the repo in Vercel.
-3. Set environment variable `OPENWEATHER_API_KEY` in Vercel Project Settings.
+3. Set environment variables in Vercel Project Settings:
+   - `OPENWEATHER_API_KEY`
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
 4. Deploy.
 
 No code changes are required for deployment.

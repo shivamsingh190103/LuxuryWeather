@@ -106,6 +106,20 @@ export function WeatherIconMotion({ condition }: WeatherIconMotionProps) {
     return <Cloud className="h-14 w-14 text-slate-100" />;
   }, [normalized]);
 
+  const iconMotion = useMemo(() => {
+    if (normalized.includes("clear") || normalized.includes("sun")) {
+      return {
+        animate: { y: [0, -4, 0], rotate: [0, 3, 0] },
+        transition: { repeat: Infinity, duration: 8, ease: "easeInOut" as const }
+      };
+    }
+
+    return {
+      animate: { y: [0, -6, 0] },
+      transition: { repeat: Infinity, duration: 4.6, ease: "easeInOut" as const }
+    };
+  }, [normalized]);
+
   const { View } = useLottie({
     animationData: animationData ?? EMPTY_ANIMATION,
     loop: true,
@@ -153,8 +167,8 @@ export function WeatherIconMotion({ condition }: WeatherIconMotionProps) {
       className="relative flex h-24 w-24 items-center justify-center"
     >
       <motion.div
-        animate={{ y: [0, -5, 0] }}
-        transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+        animate={iconMotion.animate}
+        transition={iconMotion.transition}
         className="absolute inset-0 flex items-center justify-center"
       >
         {fallbackIcon}

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from "react";
 type WeatherSceneFXProps = {
   condition: string;
   icon?: string;
+  isOffline?: boolean;
 };
 
 type SceneMode =
@@ -153,7 +154,7 @@ const SCENE_THEMES: Record<SceneMode, SceneTheme> = {
   }
 };
 
-export function WeatherSceneFX({ condition, icon }: WeatherSceneFXProps) {
+export function WeatherSceneFX({ condition, icon, isOffline = false }: WeatherSceneFXProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const orbARef = useRef<HTMLDivElement>(null);
   const orbBRef = useRef<HTMLDivElement>(null);
@@ -438,7 +439,13 @@ export function WeatherSceneFX({ condition, icon }: WeatherSceneFXProps) {
   }, [scene.mode]);
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[2] overflow-hidden">
+    <div
+      className="pointer-events-none fixed inset-0 z-[2] overflow-hidden transition-[filter,opacity] duration-700"
+      style={{
+        filter: isOffline ? "grayscale(0.45) saturate(0.75)" : "grayscale(0) saturate(1)",
+        opacity: isOffline ? 0.7 : 1
+      }}
+    >
       <div className="absolute inset-0" style={{ background: theme.tint }} />
 
       <div

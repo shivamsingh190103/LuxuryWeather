@@ -18,25 +18,14 @@ export async function GET(request: NextRequest) {
   const lon = toNumber(request.nextUrl.searchParams.get("lon"));
 
   try {
-    const payload = await getWeatherPayload({
-      city,
-      lat,
-      lon
-    });
-
-    return new NextResponse(JSON.stringify(payload), {
-      status: 200,
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-        "cache-control": "private, max-age=300"
-      }
-    });
+    await getWeatherPayload({ city, lat, lon });
+    return new NextResponse(null, { status: 204 });
   } catch (error) {
     if (error instanceof WeatherServiceError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
-    console.error("Unexpected weather API error", error);
-    return NextResponse.json({ error: "Failed to load weather" }, { status: 500 });
+    console.error("Weather prefetch failed", error);
+    return NextResponse.json({ error: "Prefetch failed" }, { status: 500 });
   }
 }

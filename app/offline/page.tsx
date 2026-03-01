@@ -4,49 +4,39 @@ import Link from "next/link";
 import { CloudOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GlassCard } from "@/components/GlassCard";
-import type { WeatherPayload } from "@/lib/types";
+import { readNewestWeatherCacheEntry, type WeatherCacheEntry } from "@/lib/weather-client";
 
-type CachedEntry = {
-  timestamp: number;
-  data: WeatherPayload;
-};
+function formatUpdatedText(timestamp: number) {
+  const diffMs = Date.now() - timestamp;
+  const minutes = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 export default function OfflinePage() {
-  const [cached, setCached] = useState<CachedEntry | null>(null);
+  const [cached, setCached] = useState<WeatherCacheEntry | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    let cancelled = false;
 
-    let newest: CachedEntry | null = null;
-
-    for (const key of Object.keys(window.sessionStorage)) {
-      if (!key.startsWith("weather:")) {
-        continue;
+    void readNewestWeatherCacheEntry({ allowStale: true }).then((entry) => {
+      if (!cancelled) {
+        setCached(entry);
       }
+    });
 
-      const raw = window.sessionStorage.getItem(key);
-      if (!raw) {
-        continue;
-      }
-
-      try {
-        const parsed = JSON.parse(raw) as CachedEntry;
-        if (
-          parsed &&
-          typeof parsed.timestamp === "number" &&
-          parsed.data &&
-          (!newest || parsed.timestamp > newest.timestamp)
-        ) {
-          newest = parsed;
-        }
-      } catch {
-        // Ignore malformed cache entries.
-      }
-    }
-
-    setCached(newest);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -61,10 +51,8 @@ export default function OfflinePage() {
         </p>
 
         {cached && (
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-            <p className="text-sm text-white/65">
-              Cached at {new Date(cached.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </p>
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-left shadow-2xl backdrop-blur-2xl">
+            <p className="text-sm text-white/65">Updated {formatUpdatedText(cached.timestamp)}</p>
             <p className="mt-2 text-xl font-semibold">
               {cached.data.location.name}, {cached.data.location.country}
             </p>

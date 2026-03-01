@@ -10,6 +10,7 @@ import {
   useRef,
   useState
 } from "react";
+import { useCanHover } from "@/hooks/useCanHover";
 
 type SearchBarProps = {
   value: string;
@@ -29,6 +30,7 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
   const [expanded, setExpanded] = useState(false);
   const [expandedWidth, setExpandedWidth] = useState(320);
   const inputRef = useRef<HTMLInputElement>(null);
+  const canHover = useCanHover();
 
   useEffect(() => {
     const updateWidth = () => {
@@ -77,6 +79,7 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
     >
       <motion.button
         type="button"
+        whileHover={canHover ? { scale: 1.03 } : undefined}
         whileTap={{ scale: 0.97 }}
         onClick={() => {
           setExpanded(true);

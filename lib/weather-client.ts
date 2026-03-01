@@ -1,3 +1,4 @@
+import { del, get, keys, set } from "idb-keyval";
 import type { WeatherPayload } from "@/lib/types";
 
 export type WeatherQuery = {
@@ -6,13 +7,18 @@ export type WeatherQuery = {
   lon?: number;
 };
 
-type CacheEntry = {
+export type WeatherCacheEntry = {
   timestamp: number;
   data: WeatherPayload;
 };
 
+type ReadCacheOptions = {
+  allowStale?: boolean;
+};
+
 export const WEATHER_CACHE_TTL = 10 * 60 * 1000;
 const LAST_SUCCESS_CACHE_KEY = "weather:last-success";
+const WEATHER_KEY_PREFIX = "weather:";
 
 export class WeatherClientError extends Error {
   status?: number;
@@ -50,56 +56,122 @@ export function weatherCacheKey(query: WeatherQuery) {
   return `weather:coords:${lat},${lon}`;
 }
 
-function canUseStorage() {
-  return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
+function canUseIndexedDb() {
+  return typeof window !== "undefined" && typeof window.indexedDB !== "undefined";
 }
 
-export function readWeatherCache(key: string): WeatherPayload | null {
-  if (!canUseStorage()) {
+function isEntryStale(entry: WeatherCacheEntry) {
+  return Date.now() - entry.timestamp > WEATHER_CACHE_TTL;
+}
+
+async function readEntry(
+  key: string,
+  options: ReadCacheOptions = {}
+): Promise<WeatherCacheEntry | null> {
+  if (!canUseIndexedDb()) {
     return null;
   }
 
   try {
-    const raw = window.sessionStorage.getItem(key);
-    if (!raw) {
+    const entry = await get<WeatherCacheEntry>(key);
+
+    if (!entry || typeof entry.timestamp !== "number" || !entry.data) {
       return null;
     }
 
-    const parsed = JSON.parse(raw) as CacheEntry;
-    if (Date.now() - parsed.timestamp > WEATHER_CACHE_TTL) {
-      window.sessionStorage.removeItem(key);
+    if (!options.allowStale && isEntryStale(entry)) {
+      await del(key);
       return null;
     }
 
-    return parsed.data;
+    return entry;
   } catch {
     return null;
   }
 }
 
-export function writeWeatherCache(key: string, data: WeatherPayload) {
-  if (!canUseStorage()) {
+export async function readWeatherCacheEntry(
+  key: string,
+  options: ReadCacheOptions = {}
+) {
+  return readEntry(key, options);
+}
+
+export async function readWeatherCache(key: string, options: ReadCacheOptions = {}) {
+  const entry = await readEntry(key, options);
+  return entry?.data ?? null;
+}
+
+export async function writeWeatherCache(key: string, data: WeatherPayload) {
+  if (!canUseIndexedDb()) {
     return;
   }
 
-  const payload: CacheEntry = {
+  const payload: WeatherCacheEntry = {
     timestamp: Date.now(),
     data
   };
 
   try {
-    window.sessionStorage.setItem(key, JSON.stringify(payload));
+    await set(key, payload);
   } catch {
-    // Ignore quota/storage errors in private mode.
+    // Ignore quota and private mode failures.
   }
 }
 
-export function readLastSuccessfulCache() {
-  return readWeatherCache(LAST_SUCCESS_CACHE_KEY);
+export async function readLastSuccessfulCacheEntry(options: ReadCacheOptions = {}) {
+  return readEntry(LAST_SUCCESS_CACHE_KEY, options);
 }
 
-export function writeLastSuccessfulCache(data: WeatherPayload) {
-  writeWeatherCache(LAST_SUCCESS_CACHE_KEY, data);
+export async function readLastSuccessfulCache(options: ReadCacheOptions = {}) {
+  const entry = await readEntry(LAST_SUCCESS_CACHE_KEY, options);
+  return entry?.data ?? null;
+}
+
+export async function writeLastSuccessfulCache(data: WeatherPayload) {
+  await writeWeatherCache(LAST_SUCCESS_CACHE_KEY, data);
+}
+
+export async function readNewestWeatherCacheEntry(options: ReadCacheOptions = {}) {
+  if (!canUseIndexedDb()) {
+    return null;
+  }
+
+  try {
+    const allKeys = await keys();
+    let newest: WeatherCacheEntry | null = null;
+
+    for (const cacheKey of allKeys) {
+      if (typeof cacheKey !== "string") {
+        continue;
+      }
+
+      if (!cacheKey.startsWith(WEATHER_KEY_PREFIX)) {
+        continue;
+      }
+
+      const entry = await readEntry(cacheKey, { allowStale: true });
+      if (!entry) {
+        continue;
+      }
+
+      if (!newest || entry.timestamp > newest.timestamp) {
+        newest = entry;
+      }
+    }
+
+    if (!newest) {
+      return null;
+    }
+
+    if (!options.allowStale && isEntryStale(newest)) {
+      return null;
+    }
+
+    return newest;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchWeather(query: WeatherQuery): Promise<WeatherPayload> {

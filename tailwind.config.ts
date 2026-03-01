@@ -24,7 +24,7 @@ const config: Config = {
         glass: "0 24px 80px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.08)"
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"]
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"]
       },
       keyframes: {
         mesh: {

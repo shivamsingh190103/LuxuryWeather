@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Droplets, Gauge, Wind } from "lucide-react";
 import { AQIDisplay } from "@/components/AQIDisplay";
+import { useCanHover } from "@/hooks/useCanHover";
 
 type WeatherMetricsProps = {
   humidity: number;
@@ -12,6 +13,8 @@ type WeatherMetricsProps = {
 };
 
 export function WeatherMetrics({ humidity, wind, pressure, aqi }: WeatherMetricsProps) {
+  const canHover = useCanHover();
+
   const metrics = [
     {
       icon: Droplets,
@@ -35,8 +38,9 @@ export function WeatherMetrics({ humidity, wind, pressure, aqi }: WeatherMetrics
       {metrics.map((metric) => (
         <motion.div
           key={metric.label}
+          whileHover={canHover ? { scale: 1.02 } : undefined}
           whileTap={{ scale: 0.97 }}
-          className="hover-lift rounded-2xl border border-white/10 bg-white/5 p-3"
+          className="hover-lift rounded-2xl border border-white/10 bg-white/5 p-3 shadow-2xl backdrop-blur-2xl"
         >
           <metric.icon className="h-4 w-4 text-sky-200" />
           <p className="mt-2 text-[11px] uppercase tracking-wide text-white/60">{metric.label}</p>

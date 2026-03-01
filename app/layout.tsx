@@ -1,12 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter"
-});
 
 export const metadata: Metadata = {
   title: "Luxury Weather",
@@ -41,7 +39,7 @@ export default function RootLayout({
           content="black-translucent"
         />
       </head>
-      <body className={`${inter.variable} min-h-screen font-sans antialiased`}>
+      <body className="min-h-screen font-sans antialiased">
         <div className="mesh-background" aria-hidden="true" />
         <div className="relative z-10">{children}</div>
       </body>

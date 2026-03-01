@@ -9,7 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@upstash/redis": "^1.36.3",
     "framer-motion": "^11.15.0",
+    "idb-keyval": "^6.2.2",
     "leaflet": "^1.9.4",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.476.0",

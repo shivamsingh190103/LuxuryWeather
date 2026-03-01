@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Activity } from "lucide-react";
+import { useCanHover } from "@/hooks/useCanHover";
 
 type AQIDisplayProps = {
   aqi?: number;
@@ -16,11 +17,14 @@ const aqiLevels = [
 ] as const;
 
 export function AQIDisplay({ aqi }: AQIDisplayProps) {
+  const canHover = useCanHover();
+
   if (typeof aqi !== "number") {
     return (
       <motion.div
+        whileHover={canHover ? { scale: 1.02 } : undefined}
         whileTap={{ scale: 0.97 }}
-        className="hover-lift rounded-2xl border border-white/10 bg-white/5 p-3"
+        className="hover-lift rounded-2xl border border-white/10 bg-white/5 p-3 shadow-2xl backdrop-blur-2xl"
       >
         <Activity className="h-4 w-4 text-sky-200" />
         <p className="mt-2 text-[11px] uppercase tracking-wide text-white/60">Air Quality</p>
@@ -33,10 +37,11 @@ export function AQIDisplay({ aqi }: AQIDisplayProps) {
 
   return (
     <motion.div
+      whileHover={canHover ? { scale: 1.02 } : undefined}
       whileTap={{ scale: 0.97 }}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className={`hover-lift rounded-2xl border border-white/10 p-3 ${level.bg}`}
+      className={`hover-lift rounded-2xl border border-white/10 p-3 shadow-2xl backdrop-blur-2xl ${level.bg}`}
     >
       <Activity className={`h-4 w-4 ${level.color}`} />
       <p className="mt-2 text-[11px] uppercase tracking-wide text-white/60">Air Quality</p>
