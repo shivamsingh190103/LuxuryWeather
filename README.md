@@ -42,6 +42,7 @@ flowchart LR
 - CDN-friendly response headers (`public, s-maxage=300, stale-while-revalidate=600`).
 - `X-Cache` observability headers (`HIT | MISS | BYPASS`).
 - Prefetch endpoint warms cache on intentional hover (300ms).
+- Concurrency behavior: if 1,000 users search the same location simultaneously, Redis + CDN edge caching collapse duplicate upstream work so most requests are served as cache hits instead of re-calling OpenWeather.
 
 ### Abuse Protection
 - Route-level sliding-window rate limits:
