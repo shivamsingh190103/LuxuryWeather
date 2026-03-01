@@ -13,6 +13,13 @@ export type WeatherServiceQuery = {
   lon?: number;
 };
 
+export type WeatherCacheStatus = "HIT" | "MISS" | "BYPASS";
+
+export type WeatherServiceResult = {
+  payload: WeatherPayload;
+  cacheStatus: WeatherCacheStatus;
+};
+
 type CacheEnvelope<T> = {
   fetchedAt: number;
   data: T;
@@ -232,27 +239,36 @@ async function fetchWeatherFromOpenWeather(query: WeatherServiceQuery): Promise<
   };
 }
 
-export async function getWeatherPayload(query: WeatherServiceQuery): Promise<WeatherPayload> {
+export async function getWeatherPayloadWithMeta(
+  query: WeatherServiceQuery
+): Promise<WeatherServiceResult> {
   const normalized = normalizeQuery(query);
   const key = weatherCacheKey(normalized);
   const redis = getRedisClient();
+  let cacheStatus: WeatherCacheStatus = redis ? "MISS" : "BYPASS";
+  let redisReadFailed = false;
 
   if (redis) {
     try {
       const cached = await redis.get<CacheEnvelope<WeatherPayload>>(key);
       if (cached && typeof cached.fetchedAt === "number") {
         if (Date.now() - cached.fetchedAt < WEATHER_CACHE_TTL_MS && cached.data) {
-          return cached.data;
+          return {
+            payload: cached.data,
+            cacheStatus: "HIT"
+          };
         }
       }
     } catch (error) {
       console.error("Redis cache read failed for weather endpoint", error);
+      redisReadFailed = true;
+      cacheStatus = "BYPASS";
     }
   }
 
   const payload = await fetchWeatherFromOpenWeather(normalized);
 
-  if (redis) {
+  if (redis && !redisReadFailed) {
     try {
       await redis.set(
         key,
@@ -264,10 +280,19 @@ export async function getWeatherPayload(query: WeatherServiceQuery): Promise<Wea
       );
     } catch (error) {
       console.error("Redis cache write failed for weather endpoint", error);
+      cacheStatus = "BYPASS";
     }
   }
 
-  return payload;
+  return {
+    payload,
+    cacheStatus
+  };
+}
+
+export async function getWeatherPayload(query: WeatherServiceQuery): Promise<WeatherPayload> {
+  const result = await getWeatherPayloadWithMeta(query);
+  return result.payload;
 }
 
 function citySuggestionsCacheKey(query: string) {

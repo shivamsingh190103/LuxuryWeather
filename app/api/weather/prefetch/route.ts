@@ -19,7 +19,12 @@ export async function GET(request: NextRequest) {
 
   try {
     await getWeatherPayload({ city, lat, lon });
-    return new NextResponse(null, { status: 204 });
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        "x-cache-prefetch": "warmed"
+      }
+    });
   } catch (error) {
     if (error instanceof WeatherServiceError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

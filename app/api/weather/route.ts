@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { WeatherServiceError, getWeatherPayload } from "@/lib/server/weather-service";
+import { WeatherServiceError, getWeatherPayloadWithMeta } from "@/lib/server/weather-service";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const lon = toNumber(request.nextUrl.searchParams.get("lon"));
 
   try {
-    const payload = await getWeatherPayload({
+    const { payload, cacheStatus } = await getWeatherPayloadWithMeta({
       city,
       lat,
       lon
@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         "content-type": "application/json; charset=utf-8",
-        "cache-control": "private, max-age=300"
+        "cache-control": "private, max-age=300",
+        "x-cache": cacheStatus
       }
     });
   } catch (error) {
