@@ -150,4 +150,4 @@ curl -I http://localhost:3000/api/weather?city=London
 ## Author
 
 Built by Shivam Singh — final semester, A.K.G.E.C.  
-[LinkedIn URL] · [GitHub URL](https://github.com/shivamsingh190103/LuxuryWeather)
+[GitHub URL](https://github.com/shivamsingh190103/LuxuryWeather)
